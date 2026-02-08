@@ -1,0 +1,8 @@
+fastapi>=0.115.0
+uvicorn[standard]
+sqlalchemy[asyncio]>=2.0.36
+aiosqlite
+pydantic>=2.10.0
+bcrypt
+python-multipart
+openpyxl
