@@ -14,3 +14,6 @@ class Payment(Base):
     customer: Mapped[str] = mapped_column(String(200), nullable=False)
     payment_method: Mapped[str] = mapped_column(String(50), nullable=False)
     amount_mwk: Mapped[float] = mapped_column(Float, nullable=False)
+    product_type: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="tyre", server_default="tyre"
+    )

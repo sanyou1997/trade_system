@@ -1,3 +1,9 @@
+# Base docker-compose configuration (shared between dev and prod)
+#
+# Usage:
+#   Dev:  docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+#   Prod: docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
+
 services:
   backend:
     build:
@@ -12,17 +18,15 @@ services:
     environment:
       - DATABASE_URL=sqlite+aiosqlite:////app/data/tyre_system.db
       - EXCEL_DIR=/app/data/excel
-      - DEBUG=false
-      - SESSION_SECRET=change-this-in-production
-      - ALLOWED_ORIGINS=http://localhost:3001,http://localhost,http://8.208.94.18:3001,http://8.208.94.18
+      - PHONE_EXCEL_DIR=/app/data/phone_excel
+      - PHONE_INVOICE_DIR=/app/data/phone_excel/invoices
+      - PHONE_DAILY_DIR=/app/data/phone_excel/daily
     restart: unless-stopped
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      args:
-        NEXT_PUBLIC_API_URL: http://8.208.94.18:8001/api/v1
     container_name: tyre-frontend
     ports:
       - "3001:3000"

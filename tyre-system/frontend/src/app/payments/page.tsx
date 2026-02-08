@@ -16,6 +16,7 @@ import {
   useDeletePayment,
   useReceivables,
 } from '@/hooks/usePayments';
+import { useProductType } from '@/lib/product-context';
 import { formatMWK, formatNumber, formatDate, formatDateISO } from '@/lib/utils';
 import { Payment, PaymentMethod, Receivable } from '@/lib/types';
 import { Trash2, AlertTriangle } from 'lucide-react';
@@ -39,6 +40,7 @@ const YEAR_OPTIONS = Array.from({ length: 5 }, (_, i) => ({
 
 export default function PaymentsPage() {
   const { toast } = useToast();
+  const { productType } = useProductType();
   const now = new Date();
   const today = formatDateISO(now);
 
@@ -56,8 +58,16 @@ export default function PaymentsPage() {
 
   const [deleteTarget, setDeleteTarget] = useState<Payment | null>(null);
 
-  const { data: payments, isLoading } = usePayments(Number(year), Number(month));
-  const { data: receivablesData } = useReceivables(Number(year), Number(month));
+  const { data: payments, isLoading } = usePayments(
+    Number(year),
+    Number(month),
+    productType,
+  );
+  const { data: receivablesData } = useReceivables(
+    Number(year),
+    Number(month),
+    productType,
+  );
   const createPayment = useCreatePayment();
   const deletePayment = useDeletePayment();
 
@@ -121,6 +131,7 @@ export default function PaymentsPage() {
         customer: customer.trim(),
         payment_method: paymentMethod as PaymentMethod,
         amount_mwk: numAmount,
+        product_type: productType,
       });
       toast('success', 'Payment recorded.');
       setCustomer('');

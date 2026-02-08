@@ -29,7 +29,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def init_db() -> None:
-    """Create all tables and enable WAL mode."""
+    """Create all tables, enable WAL mode, and run lightweight migrations."""
     from sqlalchemy import text
 
     from app.models import (  # noqa: F401 - ensure models are registered
@@ -43,8 +43,34 @@ async def init_db() -> None:
         Tyre,
         User,
     )
+    from app.models.phone import Phone  # noqa: F401
+    from app.models.phone_sale import PhoneSale  # noqa: F401
+    from app.models.phone_inventory import PhoneInventoryPeriod  # noqa: F401
+    from app.models.phone_loss import PhoneLoss  # noqa: F401
     from app.models.base import Base
 
     async with engine.begin() as conn:
         await conn.execute(text("PRAGMA journal_mode=WAL"))
         await conn.run_sync(Base.metadata.create_all)
+
+        # Lightweight migrations for existing tables
+        await _add_column_if_missing(
+            conn,
+            "payments",
+            "product_type",
+            "VARCHAR(20) NOT NULL DEFAULT 'tyre'",
+        )
+
+
+async def _add_column_if_missing(
+    conn, table: str, column: str, column_def: str,
+) -> None:
+    """Add a column to an existing table if it doesn't exist yet (SQLite)."""
+    from sqlalchemy import text
+
+    result = await conn.execute(text(f"PRAGMA table_info({table})"))
+    columns = [row[1] for row in result.fetchall()]
+    if column not in columns:
+        await conn.execute(
+            text(f"ALTER TABLE {table} ADD COLUMN {column} {column_def}")
+        )

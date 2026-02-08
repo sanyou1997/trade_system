@@ -15,6 +15,7 @@ router = APIRouter(prefix="/payments", tags=["payments"])
 async def list_payments(
     year: int = Query(default=None),
     month: int = Query(default=None, ge=1, le=12),
+    product_type: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[list[PaymentResponse]]:
     query = select(Payment)
@@ -23,6 +24,8 @@ async def list_payments(
             func.extract("year", Payment.payment_date) == year,
             func.extract("month", Payment.payment_date) == month,
         )
+    if product_type:
+        query = query.where(Payment.product_type == product_type)
     query = query.order_by(Payment.payment_date.desc())
     result = await db.execute(query)
     payments = result.scalars().all()
@@ -35,33 +38,55 @@ async def list_payments(
 async def get_receivables(
     year: int,
     month: int,
+    product_type: str = Query(default="tyre"),
     db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[dict]:
     """Per-customer receivables: sales total vs payments received."""
     if not 1 <= month <= 12:
         return ApiResponse.fail("Month must be between 1 and 12")
 
-    # Sales totals by customer
-    sales_result = await db.execute(
-        select(
-            Sale.customer_name,
-            func.sum(Sale.total).label("total_sales"),
-            func.count(Sale.id).label("sale_count"),
+    # Sales totals by customer — switch between tyre and phone sales
+    if product_type == "phone":
+        from app.models.phone_sale import PhoneSale
+
+        sales_result = await db.execute(
+            select(
+                PhoneSale.customer_name,
+                func.sum(PhoneSale.total).label("total_sales"),
+                func.count(PhoneSale.id).label("sale_count"),
+            )
+            .where(
+                func.extract("year", PhoneSale.sale_date) == year,
+                func.extract("month", PhoneSale.sale_date) == month,
+                PhoneSale.customer_name.isnot(None),
+                PhoneSale.customer_name != "",
+            )
+            .group_by(PhoneSale.customer_name)
         )
-        .where(
-            func.extract("year", Sale.sale_date) == year,
-            func.extract("month", Sale.sale_date) == month,
-            Sale.customer_name.isnot(None),
-            Sale.customer_name != "",
+    else:
+        sales_result = await db.execute(
+            select(
+                Sale.customer_name,
+                func.sum(Sale.total).label("total_sales"),
+                func.count(Sale.id).label("sale_count"),
+            )
+            .where(
+                func.extract("year", Sale.sale_date) == year,
+                func.extract("month", Sale.sale_date) == month,
+                Sale.customer_name.isnot(None),
+                Sale.customer_name != "",
+            )
+            .group_by(Sale.customer_name)
         )
-        .group_by(Sale.customer_name)
-    )
     sales_by_customer = {
-        row.customer_name: {"total_sales": float(row.total_sales), "sale_count": int(row.sale_count)}
+        row.customer_name: {
+            "total_sales": float(row.total_sales),
+            "sale_count": int(row.sale_count),
+        }
         for row in sales_result.all()
     }
 
-    # Payments totals by customer
+    # Payments totals by customer (filtered by product_type)
     payments_result = await db.execute(
         select(
             Payment.customer,
@@ -70,6 +95,7 @@ async def get_receivables(
         .where(
             func.extract("year", Payment.payment_date) == year,
             func.extract("month", Payment.payment_date) == month,
+            Payment.product_type == product_type,
         )
         .group_by(Payment.customer)
     )
@@ -81,7 +107,9 @@ async def get_receivables(
     all_customers = set(sales_by_customer.keys()) | set(payments_by_customer.keys())
     receivables = []
     for customer in sorted(all_customers):
-        sales_info = sales_by_customer.get(customer, {"total_sales": 0, "sale_count": 0})
+        sales_info = sales_by_customer.get(
+            customer, {"total_sales": 0, "sale_count": 0}
+        )
         total_sales = sales_info["total_sales"]
         sale_count = sales_info["sale_count"]
         total_paid = payments_by_customer.get(customer, 0)
@@ -111,20 +139,25 @@ async def get_receivables(
 async def get_payment_totals(
     year: int,
     month: int,
+    product_type: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[dict]:
     if not 1 <= month <= 12:
         return ApiResponse.fail("Month must be between 1 and 12")
+
+    conditions = [
+        func.extract("year", Payment.payment_date) == year,
+        func.extract("month", Payment.payment_date) == month,
+    ]
+    if product_type:
+        conditions.append(Payment.product_type == product_type)
 
     result = await db.execute(
         select(
             Payment.payment_method,
             func.sum(Payment.amount_mwk).label("total"),
         )
-        .where(
-            func.extract("year", Payment.payment_date) == year,
-            func.extract("month", Payment.payment_date) == month,
-        )
+        .where(*conditions)
         .group_by(Payment.payment_method)
     )
     rows = result.all()
@@ -162,6 +195,7 @@ async def create_payment(
         customer=body.customer,
         payment_method=body.payment_method,
         amount_mwk=body.amount_mwk,
+        product_type=body.product_type,
     )
     db.add(payment)
     await db.commit()

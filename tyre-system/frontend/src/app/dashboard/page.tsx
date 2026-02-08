@@ -13,9 +13,23 @@ import {
   useSalesTrend,
   useRecentSales,
 } from '@/hooks/useDashboard';
+import {
+  usePhoneDailySummary,
+  usePhoneWeChatMessage,
+  usePhoneSalesTrend,
+  usePhoneRecentSales,
+} from '@/hooks/usePhoneDashboard';
 import { useLowStock } from '@/hooks/useInventory';
-import { formatMWK, formatDateISO, formatDate, formatTyreLabel } from '@/lib/utils';
-import { Sale, InventoryItem } from '@/lib/types';
+import { usePhoneLowStock } from '@/hooks/usePhoneInventory';
+import { useProductType } from '@/lib/product-context';
+import {
+  formatMWK,
+  formatDateISO,
+  formatDate,
+  formatTyreLabel,
+  formatPhoneLabel,
+} from '@/lib/utils';
+import { Sale, PhoneSale, InventoryItem, PhoneInventoryItem } from '@/lib/types';
 import {
   ShoppingCart,
   TrendingUp,
@@ -38,6 +52,7 @@ import {
 } from 'recharts';
 
 export default function DashboardPage() {
+  const { isTyre } = useProductType();
   const today = formatDateISO(new Date());
   const [selectedDate, setSelectedDate] = useState(today);
 
@@ -45,11 +60,25 @@ export default function DashboardPage() {
   const year = selected.getFullYear();
   const month = selected.getMonth() + 1;
 
-  const { data: summary, isLoading: summaryLoading } = useDailySummary(selectedDate);
-  const { data: wechat } = useWeChatMessage(selectedDate);
-  const { data: trend } = useSalesTrend(year, month);
-  const { data: recentSales } = useRecentSales(10);
-  const { data: lowStock } = useLowStock();
+  // Tyre hooks
+  const tyreSummary = useDailySummary(selectedDate);
+  const tyreWechat = useWeChatMessage(selectedDate);
+  const tyreTrend = useSalesTrend(year, month);
+  const tyreRecent = useRecentSales(10);
+  const tyreLowStock = useLowStock();
+
+  // Phone hooks
+  const phoneSummary = usePhoneDailySummary(selectedDate);
+  const phoneWechat = usePhoneWeChatMessage(selectedDate);
+  const phoneTrend = usePhoneSalesTrend(year, month);
+  const phoneRecent = usePhoneRecentSales(10);
+  const phoneLowStock = usePhoneLowStock();
+
+  // Select active data
+  const summary = isTyre ? tyreSummary.data : phoneSummary.data;
+  const summaryLoading = isTyre ? tyreSummary.isLoading : phoneSummary.isLoading;
+  const wechat = isTyre ? tyreWechat.data : phoneWechat.data;
+  const trend = isTyre ? tyreTrend.data : phoneTrend.data;
 
   const revenueBreakdown = useMemo(() => {
     if (!summary) return [];
@@ -62,7 +91,10 @@ export default function DashboardPage() {
 
   const totalRevenue = summary?.total_revenue_mwk ?? 0;
 
-  const recentSalesColumns: Column<Sale>[] = [
+  const productLabel = isTyre ? 'Tyres' : 'Phones';
+
+  // Tyre recent sales columns
+  const tyreRecentColumns: Column<Sale>[] = [
     {
       key: 'sale_date',
       label: 'Date',
@@ -73,6 +105,44 @@ export default function DashboardPage() {
       label: 'Tyre',
       render: (s) =>
         formatTyreLabel(s.tyre_size, s.tyre_type, s.tyre_brand, s.tyre_id),
+    },
+    { key: 'quantity', label: 'Qty', className: 'text-center' },
+    {
+      key: 'total',
+      label: 'Total',
+      render: (s) => formatMWK(s.total),
+    },
+    {
+      key: 'payment_method',
+      label: 'Payment',
+      render: (s) => (
+        <Badge
+          variant={
+            s.payment_method === 'Cash'
+              ? 'info'
+              : s.payment_method === 'Mukuru'
+                ? 'success'
+                : 'warning'
+          }
+        >
+          {s.payment_method}
+        </Badge>
+      ),
+    },
+  ];
+
+  // Phone recent sales columns
+  const phoneRecentColumns: Column<PhoneSale>[] = [
+    {
+      key: 'sale_date',
+      label: 'Date',
+      render: (s) => formatDate(s.sale_date),
+    },
+    {
+      key: 'phone',
+      label: 'Phone',
+      render: (s) =>
+        formatPhoneLabel(s.phone_brand, s.phone_model, s.phone_config, s.phone_id),
     },
     { key: 'quantity', label: 'Qty', className: 'text-center' },
     {
@@ -219,46 +289,86 @@ export default function DashboardPage() {
         <Card
           title="Low Stock Alerts"
           headerRight={
-            lowStock && lowStock.length > 0 ? (
-              <Badge variant="danger">{lowStock.length} items</Badge>
-            ) : null
+            isTyre
+              ? tyreLowStock.data && tyreLowStock.data.length > 0
+                ? <Badge variant="danger">{tyreLowStock.data.length} items</Badge>
+                : null
+              : phoneLowStock.data && phoneLowStock.data.length > 0
+                ? <Badge variant="danger">{phoneLowStock.data.length} items</Badge>
+                : null
           }
         >
-          {lowStock && lowStock.length > 0 ? (
-            <div className="space-y-2 max-h-64 overflow-y-auto">
-              {lowStock.map((item: InventoryItem) => (
-                <div
-                  key={item.tyre_id}
-                  className="flex items-center justify-between px-3 py-2 bg-red-50 rounded text-sm"
-                >
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle size={14} className="text-red-500" />
-                    <span className="text-slate-700">
-                      {item.size} - {item.brand}
+          {isTyre ? (
+            tyreLowStock.data && tyreLowStock.data.length > 0 ? (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {tyreLowStock.data.map((item: InventoryItem) => (
+                  <div
+                    key={item.tyre_id}
+                    className="flex items-center justify-between px-3 py-2 bg-red-50 rounded text-sm"
+                  >
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle size={14} className="text-red-500" />
+                      <span className="text-slate-700">
+                        {item.size} - {item.brand}
+                      </span>
+                    </div>
+                    <span className="font-medium text-red-600">
+                      {item.remaining_stock} left
                     </span>
                   </div>
-                  <span className="font-medium text-red-600">
-                    {item.remaining_stock} left
-                  </span>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-400 py-4 text-center">
+                All stock levels are healthy.
+              </p>
+            )
           ) : (
-            <p className="text-sm text-slate-400 py-4 text-center">
-              All stock levels are healthy.
-            </p>
+            phoneLowStock.data && phoneLowStock.data.length > 0 ? (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {phoneLowStock.data.map((item: PhoneInventoryItem) => (
+                  <div
+                    key={item.phone_id}
+                    className="flex items-center justify-between px-3 py-2 bg-red-50 rounded text-sm"
+                  >
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle size={14} className="text-red-500" />
+                      <span className="text-slate-700">
+                        {item.brand} {item.model}
+                      </span>
+                    </div>
+                    <span className="font-medium text-red-600">
+                      {item.remaining_stock} left
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-400 py-4 text-center">
+                All stock levels are healthy.
+              </p>
+            )
           )}
         </Card>
 
         {/* Recent Sales */}
         <div className="lg:col-span-2">
-          <Card title="Recent Sales">
-            <Table
-              columns={recentSalesColumns}
-              data={recentSales ?? []}
-              keyExtractor={(s) => s.id}
-              emptyMessage="No recent sales."
-            />
+          <Card title={`Recent ${productLabel} Sales`}>
+            {isTyre ? (
+              <Table
+                columns={tyreRecentColumns}
+                data={tyreRecent.data ?? []}
+                keyExtractor={(s) => s.id}
+                emptyMessage="No recent sales."
+              />
+            ) : (
+              <Table
+                columns={phoneRecentColumns}
+                data={phoneRecent.data ?? []}
+                keyExtractor={(s) => s.id}
+                emptyMessage="No recent sales."
+              />
+            )}
           </Card>
         </div>
       </div>

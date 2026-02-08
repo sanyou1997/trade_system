@@ -1,0 +1,15 @@
+# Production/deployment environment overrides
+#
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
+
+services:
+  backend:
+    environment:
+      - DEBUG=false
+      - SESSION_SECRET=change-this-in-production
+      - ALLOWED_ORIGINS=http://localhost:3001,http://localhost,http://8.208.94.18:3001,http://8.208.94.18
+
+  frontend:
+    build:
+      args:
+        NEXT_PUBLIC_API_URL: http://8.208.94.18:8001/api/v1

@@ -8,6 +8,7 @@ export type LossType = 'broken' | 'exchange' | 'refund';
 export type UserRole = 'admin' | 'operator';
 export type SyncDirection = 'import' | 'export';
 export type SyncStatus = 'success' | 'failed' | 'partial';
+export type ProductType = 'tyre' | 'phone';
 
 // --- Core Entities ---
 
@@ -64,6 +65,7 @@ export interface Payment {
   customer: string;
   payment_method: PaymentMethod;
   amount_mwk: number;
+  product_type: ProductType;
 }
 
 export interface PaymentCreate {
@@ -71,6 +73,7 @@ export interface PaymentCreate {
   customer: string;
   payment_method: PaymentMethod;
   amount_mwk: number;
+  product_type: ProductType;
 }
 
 export interface Loss {
@@ -221,4 +224,105 @@ export interface InventoryFilter {
   year: number;
   month: number;
   category?: TyreCategory;
+}
+
+// --- Phone Entities ---
+
+export interface Phone {
+  id: number;
+  brand: string;
+  model: string;
+  config: string;
+  note: string | null;
+  cost: number;
+  cash_price: number;
+  mukuru_price: number;
+  online_price: number;
+  status: string | null;
+  excel_row: number | null;
+}
+
+export interface PhoneWithStock extends Phone {
+  remaining_stock: number;
+  initial_stock: number;
+  added_stock: number;
+  total_sold: number;
+}
+
+export interface PhoneSale {
+  id: number;
+  sale_date: string;
+  phone_id: number;
+  quantity: number;
+  unit_price: number;
+  discount: number;
+  total: number;
+  payment_method: PaymentMethod;
+  customer_name: string;
+  synced: boolean;
+  created_at: string;
+  phone_brand?: string;
+  phone_model?: string;
+  phone_config?: string;
+}
+
+export interface PhoneSaleCreate {
+  sale_date: string;
+  phone_id: number;
+  quantity: number;
+  unit_price: number;
+  discount: number;
+  payment_method: PaymentMethod;
+  customer_name: string;
+}
+
+export interface PhoneSalesFilter {
+  start_date?: string;
+  end_date?: string;
+  payment_method?: PaymentMethod;
+  phone_id?: number;
+  customer?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface PhoneInventoryItem {
+  phone_id: number;
+  brand: string;
+  model: string;
+  config: string;
+  note: string | null;
+  cost: number;
+  cash_price: number;
+  mukuru_price: number;
+  online_price: number;
+  status: string | null;
+  year: number;
+  month: number;
+  initial_stock: number;
+  added_stock: number;
+  total_sold: number;
+  total_loss: number;
+  remaining_stock: number;
+}
+
+export interface PhoneLoss {
+  id: number;
+  loss_date: string;
+  phone_id: number;
+  quantity: number;
+  loss_type: LossType;
+  refund_amount: number;
+  notes: string | null;
+  phone_brand?: string;
+  phone_model?: string;
+}
+
+export interface PhoneLossCreate {
+  loss_date: string;
+  phone_id: number;
+  quantity: number;
+  loss_type: LossType;
+  refund_amount: number;
+  notes: string;
 }

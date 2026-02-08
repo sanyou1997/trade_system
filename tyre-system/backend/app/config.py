@@ -18,6 +18,25 @@ class Settings:
     _DEFAULT_EXCEL_DIR: Path = BASE_DIR.parent / "Tyres_Record"
     EXCEL_DIR: Path = Path(os.getenv("EXCEL_DIR", str(_DEFAULT_EXCEL_DIR)))
 
+    # Phone Excel paths
+    # Inventory: D:\OneDrive\桌面\2024SP\
+    # Invoice:   D:\OneDrive\桌面\2024SP\Sale Record\2025\
+    # Daily:     D:\OneDrive\桌面\2024SP\Sale Record\销售表格\
+    _DEFAULT_PHONE_EXCEL_DIR: Path = Path(
+        os.getenv("PHONE_EXCEL_DIR_DEFAULT", r"D:\OneDrive\桌面\2024SP")
+    )
+    PHONE_EXCEL_DIR: Path = Path(
+        os.getenv("PHONE_EXCEL_DIR", str(_DEFAULT_PHONE_EXCEL_DIR))
+    )
+    PHONE_INVOICE_DIR: Path = Path(os.getenv(
+        "PHONE_INVOICE_DIR",
+        str(_DEFAULT_PHONE_EXCEL_DIR / "Sale Record" / "2025"),
+    ))
+    PHONE_DAILY_DIR: Path = Path(os.getenv(
+        "PHONE_DAILY_DIR",
+        str(_DEFAULT_PHONE_EXCEL_DIR / "Sale Record" / "\u9500\u552e\u8868\u683c"),
+    ))
+
     # Database
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL",

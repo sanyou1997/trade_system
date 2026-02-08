@@ -1,0 +1,20 @@
+# Development environment overrides
+#
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+
+services:
+  backend:
+    environment:
+      - DEBUG=true
+      - SESSION_SECRET=dev-secret-change-in-prod
+      - ALLOWED_ORIGINS=http://localhost:3001,http://localhost:3000,http://localhost
+    volumes:
+      # Mount local Excel files for development
+      - ./Tyres_Record:/app/data/excel:ro
+      # Mount phone Excel files (adjust path as needed)
+      - "D:\\OneDrive\\桌面\\2024SP:/app/data/phone_excel:ro"
+
+  frontend:
+    build:
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8001/api/v1

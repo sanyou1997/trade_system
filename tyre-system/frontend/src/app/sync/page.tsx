@@ -8,6 +8,7 @@ import Badge from '@/components/ui/Badge';
 import Select from '@/components/ui/Select';
 import Table, { Column } from '@/components/ui/Table';
 import { useToast } from '@/components/ui/Toast';
+import { useProductType } from '@/lib/product-context';
 import { api } from '@/lib/api';
 import { SyncLogEntry } from '@/lib/types';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -28,7 +29,6 @@ const YEAR_OPTIONS = Array.from({ length: 3 }, (_, i) => ({
   label: String(currentYear - 1 + i),
 }));
 
-/** A file picker row: [Choose File] filename.xlsx [x] */
 function FilePicker({
   file,
   onChange,
@@ -52,7 +52,6 @@ function FilePicker({
         onChange={(e) => {
           const selected = e.target.files?.[0] ?? null;
           onChange(selected);
-          // Reset so the same file can be re-selected
           e.target.value = '';
         }}
       />
@@ -84,40 +83,44 @@ function FilePicker({
 
 export default function SyncPage() {
   const { toast } = useToast();
+  const { isTyre } = useProductType();
   const queryClient = useQueryClient();
 
-  // Period state (shared)
   const [year, setYear] = useState(String(currentYear));
   const [month, setMonth] = useState(String(new Date().getMonth() + 1));
 
-  // File selections
   const [inventoryFile, setInventoryFile] = useState<File | null>(null);
   const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
   const [dailyFile, setDailyFile] = useState<File | null>(null);
 
-  // Loading states
   const [importingInventory, setImportingInventory] = useState(false);
   const [importingInvoice, setImportingInvoice] = useState(false);
   const [importingDaily, setImportingDaily] = useState(false);
   const [exportingInventory, setExportingInventory] = useState(false);
   const [exportingInvoice, setExportingInvoice] = useState(false);
 
-  // Sync history
   const { data: syncHistory, isLoading: historyLoading } = useQuery({
     queryKey: ['sync', 'history'],
     queryFn: () => api.get<SyncLogEntry[]>('/sync/history'),
   });
 
+  const syncPrefix = isTyre ? '/sync' : '/phone-sync';
+
   const invalidateAll = () => {
-    queryClient.removeQueries({ queryKey: ['dashboard'] });
-    queryClient.removeQueries({ queryKey: ['inventory'] });
-    queryClient.removeQueries({ queryKey: ['tyres'] });
-    queryClient.removeQueries({ queryKey: ['sales'] });
+    if (isTyre) {
+      queryClient.removeQueries({ queryKey: ['dashboard'] });
+      queryClient.removeQueries({ queryKey: ['inventory'] });
+      queryClient.removeQueries({ queryKey: ['tyres'] });
+      queryClient.removeQueries({ queryKey: ['sales'] });
+    } else {
+      queryClient.removeQueries({ queryKey: ['phone-dashboard'] });
+      queryClient.removeQueries({ queryKey: ['phone-inventory'] });
+      queryClient.removeQueries({ queryKey: ['phones'] });
+      queryClient.removeQueries({ queryKey: ['phone-sales'] });
+    }
     queryClient.removeQueries({ queryKey: ['payments'] });
     queryClient.invalidateQueries({ queryKey: ['sync'] });
   };
-
-  // --- Import handlers ---
 
   async function handleImportInventory() {
     if (!inventoryFile) {
@@ -127,14 +130,12 @@ export default function SyncPage() {
     setImportingInventory(true);
     try {
       const params = new URLSearchParams({ year, month });
-      const result = await api.upload<{ tyres_imported: number; exchange_rate: number }>(
-        `/sync/import/inventory?${params}`,
+      const result = await api.upload<Record<string, unknown>>(
+        `${syncPrefix}/import/inventory?${params}`,
         inventoryFile,
       );
-      toast(
-        'success',
-        `Inventory imported: ${result.tyres_imported} tyres, exchange rate: ${result.exchange_rate}.`,
-      );
+      const count = isTyre ? result.tyres_imported : result.phones_imported;
+      toast('success', `Inventory imported: ${count ?? 0} ${isTyre ? 'tyres' : 'phones'}.`);
       setInventoryFile(null);
       invalidateAll();
     } catch (err) {
@@ -156,22 +157,11 @@ export default function SyncPage() {
         sales_imported: number;
         payments_imported: number;
         losses_imported: number;
-        sales_duplicates_skipped?: number;
-        payments_duplicates_skipped?: number;
-        skipped_sizes?: string[];
-      }>(`/sync/import/invoice?${params}`, invoiceFile);
-
-      const parts: string[] = [];
-      parts.push(`成功导入 ${result.sales_imported} 条销售`);
-      parts.push(`${result.payments_imported} 条收款`);
-      parts.push(`${result.losses_imported} 条损失`);
-      if (result.sales_duplicates_skipped || result.payments_duplicates_skipped) {
-        parts.push(`跳过重复: ${result.sales_duplicates_skipped || 0} 销售, ${result.payments_duplicates_skipped || 0} 收款`);
-      }
-      if (result.skipped_sizes?.length) {
-        parts.push(`未匹配规格: ${result.skipped_sizes.join(', ')}`);
-      }
-      toast('success', parts.join(', '));
+      }>(`${syncPrefix}/import/invoice?${params}`, invoiceFile);
+      toast(
+        'success',
+        `Imported ${result.sales_imported} sales, ${result.payments_imported} payments, ${result.losses_imported} losses.`,
+      );
       setInvoiceFile(null);
       invalidateAll();
     } catch (err) {
@@ -191,24 +181,11 @@ export default function SyncPage() {
       const result = await api.upload<{
         sales_imported: number;
         payments_imported: number;
-        sales_duplicates_skipped?: number;
-        payments_duplicates_skipped?: number;
-        skipped_sizes?: string[];
-      }>(
-        '/sync/import/daily-sales',
-        dailyFile,
+      }>(`${syncPrefix}/import/daily-sales`, dailyFile);
+      toast(
+        'success',
+        `Imported ${result.sales_imported} sales, ${result.payments_imported} payments.`,
       );
-
-      const parts: string[] = [];
-      parts.push(`成功导入 ${result.sales_imported} 条销售`);
-      parts.push(`${result.payments_imported} 条收款`);
-      if (result.sales_duplicates_skipped || result.payments_duplicates_skipped) {
-        parts.push(`跳过重复: ${result.sales_duplicates_skipped || 0} 销售, ${result.payments_duplicates_skipped || 0} 收款`);
-      }
-      if (result.skipped_sizes?.length) {
-        parts.push(`未匹配规格: ${result.skipped_sizes.join(', ')}`);
-      }
-      toast('success', parts.join(', '));
       setDailyFile(null);
       invalidateAll();
     } catch (err) {
@@ -217,8 +194,6 @@ export default function SyncPage() {
       setImportingDaily(false);
     }
   }
-
-  // --- Export handlers ---
 
   function triggerDownload(url: string, filename: string) {
     const link = document.createElement('a');
@@ -237,16 +212,10 @@ export default function SyncPage() {
         records_written: number;
         days_processed: number;
         sheet_created?: boolean;
-        file_name?: string;
-      }>(`/sync/export/inventory?${params}`);
-
+      }>(`${syncPrefix}/export/inventory?${params}`);
       const msgs: string[] = [];
-      if (result.sheet_created) {
-        msgs.push(`New sheet created for month ${month}`);
-      }
-      msgs.push(
-        `${result.records_written} records across ${result.days_processed} days`,
-      );
+      if (result.sheet_created) msgs.push(`New sheet created for month ${month}`);
+      msgs.push(`${result.records_written} records across ${result.days_processed} days`);
       toast('success', `Inventory exported: ${msgs.join('. ')}.`);
       invalidateAll();
     } catch (err) {
@@ -258,8 +227,8 @@ export default function SyncPage() {
 
   function handleDownloadInventory() {
     triggerDownload(
-      `${API_BASE_URL}/sync/download/inventory`,
-      'Tyre_List_Internal_Available.xlsx',
+      `${API_BASE_URL}${syncPrefix}/download/inventory`,
+      isTyre ? 'Tyre_List_Internal_Available.xlsx' : 'Phone_MW_Quotation.xlsx',
     );
   }
 
@@ -271,16 +240,10 @@ export default function SyncPage() {
         sales_exported: number;
         payments_exported: number;
         file_created?: boolean;
-        file_name?: string;
-      }>(`/sync/export/invoice?${params}`);
-
+      }>(`${syncPrefix}/export/invoice?${params}`);
       const msgs: string[] = [];
-      if (result.file_created) {
-        msgs.push('New invoice file created');
-      }
-      msgs.push(
-        `${result.sales_exported} sales, ${result.payments_exported} payments`,
-      );
+      if (result.file_created) msgs.push('New invoice file created');
+      msgs.push(`${result.sales_exported} sales, ${result.payments_exported} payments`);
       toast('success', `Invoice exported: ${msgs.join('. ')}.`);
       invalidateAll();
     } catch (err) {
@@ -292,13 +255,12 @@ export default function SyncPage() {
 
   function handleDownloadInvoice() {
     const params = new URLSearchParams({ year, month });
+    const prefix = isTyre ? 'Invoice_Tyres' : 'Invoice_Phones';
     triggerDownload(
-      `${API_BASE_URL}/sync/download/invoice?${params}`,
-      `Invoice_Tyres_${year}.${month}.xlsx`,
+      `${API_BASE_URL}${syncPrefix}/download/invoice?${params}`,
+      `${prefix}_${year}.${month}.xlsx`,
     );
   }
-
-  // --- Table columns ---
 
   const columns: Column<SyncLogEntry>[] = [
     {
@@ -332,34 +294,21 @@ export default function SyncPage() {
         </Badge>
       ),
     },
-    {
-      key: 'records_processed',
-      label: 'Records',
-      className: 'text-center',
-    },
+    { key: 'records_processed', label: 'Records', className: 'text-center' },
     { key: 'file_path', label: 'File' },
   ];
 
+  const productLabel = isTyre ? 'tyre' : 'phone';
+
   return (
     <MainLayout title="Excel Sync">
-      {/* Period Selector */}
       <Card title="Period Selection">
         <div className="flex flex-wrap items-end gap-4">
           <div className="w-32">
-            <Select
-              label="Year"
-              options={YEAR_OPTIONS}
-              value={year}
-              onChange={(e) => setYear(e.target.value)}
-            />
+            <Select label="Year" options={YEAR_OPTIONS} value={year} onChange={(e) => setYear(e.target.value)} />
           </div>
           <div className="w-40">
-            <Select
-              label="Month"
-              options={MONTH_OPTIONS}
-              value={month}
-              onChange={(e) => setMonth(e.target.value)}
-            />
+            <Select label="Month" options={MONTH_OPTIONS} value={month} onChange={(e) => setMonth(e.target.value)} />
           </div>
           <p className="text-sm text-slate-500 pb-2">
             Used for inventory and invoice import operations.
@@ -368,40 +317,26 @@ export default function SyncPage() {
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-        {/* Import Section */}
-        <Card title="Import from Excel">
+        <Card title={`Import ${isTyre ? 'Tyre' : 'Phone'} Data`}>
           <div className="space-y-6">
             <p className="text-sm text-slate-500">
               Select a local Excel file to upload and import into the database.
             </p>
 
-            {/* Import Inventory */}
             <div className="border rounded-lg p-4 space-y-3">
               <div className="flex items-center gap-2">
                 <FileSpreadsheet size={18} className="text-green-600" />
                 <h3 className="font-medium text-slate-700">Inventory File</h3>
               </div>
               <p className="text-xs text-slate-500">
-                Imports tyre master data, stock levels (initial + added), and exchange rate.
+                Imports {productLabel} master data, stock levels, and exchange rate.
               </p>
-              <FilePicker
-                file={inventoryFile}
-                onChange={setInventoryFile}
-                placeholder="Select inventory .xlsx file"
-              />
-              <Button
-                onClick={handleImportInventory}
-                loading={importingInventory}
-                variant="secondary"
-                className="justify-start w-full"
-                disabled={!inventoryFile}
-              >
-                <Upload size={16} />
-                Import Inventory
+              <FilePicker file={inventoryFile} onChange={setInventoryFile} placeholder="Select inventory .xlsx file" />
+              <Button onClick={handleImportInventory} loading={importingInventory} variant="secondary" className="justify-start w-full" disabled={!inventoryFile}>
+                <Upload size={16} /> Import Inventory
               </Button>
             </div>
 
-            {/* Import Invoice */}
             <div className="border rounded-lg p-4 space-y-3">
               <div className="flex items-center gap-2">
                 <FileSpreadsheet size={18} className="text-blue-600" />
@@ -410,24 +345,12 @@ export default function SyncPage() {
               <p className="text-xs text-slate-500">
                 Imports sales records, payments, losses, and exchange rates.
               </p>
-              <FilePicker
-                file={invoiceFile}
-                onChange={setInvoiceFile}
-                placeholder="Select invoice .xlsx file"
-              />
-              <Button
-                onClick={handleImportInvoice}
-                loading={importingInvoice}
-                variant="secondary"
-                className="justify-start w-full"
-                disabled={!invoiceFile}
-              >
-                <Upload size={16} />
-                Import Invoice
+              <FilePicker file={invoiceFile} onChange={setInvoiceFile} placeholder="Select invoice .xlsx file" />
+              <Button onClick={handleImportInvoice} loading={importingInvoice} variant="secondary" className="justify-start w-full" disabled={!invoiceFile}>
+                <Upload size={16} /> Import Invoice
               </Button>
             </div>
 
-            {/* Import Daily Sales */}
             <div className="border rounded-lg p-4 space-y-3">
               <div className="flex items-center gap-2">
                 <FileSpreadsheet size={18} className="text-orange-600" />
@@ -436,64 +359,38 @@ export default function SyncPage() {
               <p className="text-xs text-slate-500">
                 Imports sales and payments from a single daily sales file.
               </p>
-              <FilePicker
-                file={dailyFile}
-                onChange={setDailyFile}
-                placeholder="Select daily sales .xlsx file"
-              />
-              <Button
-                onClick={handleImportDailySales}
-                loading={importingDaily}
-                variant="secondary"
-                className="justify-start w-full"
-                disabled={!dailyFile}
-              >
-                <Upload size={16} />
-                Import Daily Sales
+              <FilePicker file={dailyFile} onChange={setDailyFile} placeholder="Select daily sales .xlsx file" />
+              <Button onClick={handleImportDailySales} loading={importingDaily} variant="secondary" className="justify-start w-full" disabled={!dailyFile}>
+                <Upload size={16} /> Import Daily Sales
               </Button>
             </div>
           </div>
         </Card>
 
-        {/* Export Section */}
-        <Card title="Export to Excel">
+        <Card title={`Export ${isTyre ? 'Tyre' : 'Phone'} Data`}>
           <div className="space-y-6">
             <p className="text-sm text-slate-500">
-              Export data to Excel files and download them. Auto-creates
-              sheets/files if they don&apos;t exist yet.
+              Export data to Excel files and download them. Auto-creates sheets/files if they don&apos;t exist yet.
             </p>
 
-            {/* Export Inventory */}
             <div className="border rounded-lg p-4 space-y-3">
               <div className="flex items-center gap-2">
                 <FileSpreadsheet size={18} className="text-green-600" />
                 <h3 className="font-medium text-slate-700">Inventory File</h3>
               </div>
               <p className="text-xs text-slate-500">
-                Writes daily sales quantities and stock levels to the inventory
-                Excel file. Creates the month sheet if it doesn&apos;t exist.
+                Writes daily sales quantities and stock levels to the inventory Excel file.
               </p>
               <div className="flex gap-2">
-                <Button
-                  onClick={handleExportInventory}
-                  loading={exportingInventory}
-                  className="flex-1 justify-center"
-                >
-                  <Download size={16} />
-                  Export
+                <Button onClick={handleExportInventory} loading={exportingInventory} className="flex-1 justify-center">
+                  <Download size={16} /> Export
                 </Button>
-                <Button
-                  onClick={handleDownloadInventory}
-                  variant="secondary"
-                  className="justify-center"
-                >
-                  <FileDown size={16} />
-                  Download
+                <Button onClick={handleDownloadInventory} variant="secondary" className="justify-center">
+                  <FileDown size={16} /> Download
                 </Button>
               </div>
             </div>
 
-            {/* Export Invoice */}
             <div className="border rounded-lg p-4 space-y-3">
               <div className="flex items-center gap-2">
                 <FileSpreadsheet size={18} className="text-blue-600" />
@@ -501,25 +398,13 @@ export default function SyncPage() {
               </div>
               <p className="text-xs text-slate-500">
                 Exports sales, payments, and losses to the invoice Excel file.
-                Creates a new file if it doesn&apos;t exist. Marks exported
-                sales as synced.
               </p>
               <div className="flex gap-2">
-                <Button
-                  onClick={handleExportInvoice}
-                  loading={exportingInvoice}
-                  className="flex-1 justify-center"
-                >
-                  <Download size={16} />
-                  Export
+                <Button onClick={handleExportInvoice} loading={exportingInvoice} className="flex-1 justify-center">
+                  <Download size={16} /> Export
                 </Button>
-                <Button
-                  onClick={handleDownloadInvoice}
-                  variant="secondary"
-                  className="justify-center"
-                >
-                  <FileDown size={16} />
-                  Download
+                <Button onClick={handleDownloadInvoice} variant="secondary" className="justify-center">
+                  <FileDown size={16} /> Download
                 </Button>
               </div>
             </div>
@@ -527,16 +412,9 @@ export default function SyncPage() {
         </Card>
       </div>
 
-      {/* Sync History */}
       <div className="mt-6">
         <Card title="Sync History">
-          <Table
-            columns={columns}
-            data={syncHistory ?? []}
-            keyExtractor={(entry) => entry.id}
-            loading={historyLoading}
-            emptyMessage="No sync operations recorded yet."
-          />
+          <Table columns={columns} data={syncHistory ?? []} keyExtractor={(entry) => entry.id} loading={historyLoading} emptyMessage="No sync operations recorded yet." />
         </Card>
       </div>
     </MainLayout>

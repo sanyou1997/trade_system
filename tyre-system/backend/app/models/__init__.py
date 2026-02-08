@@ -7,6 +7,10 @@ from app.models.user import User
 from app.models.exchange_rate import ExchangeRate
 from app.models.sync_log import SyncLog
 from app.models.setting import Setting
+from app.models.phone import Phone
+from app.models.phone_sale import PhoneSale
+from app.models.phone_inventory import PhoneInventoryPeriod
+from app.models.phone_loss import PhoneLoss
 
 __all__ = [
     "Tyre",
@@ -18,4 +22,8 @@ __all__ = [
     "ExchangeRate",
     "SyncLog",
     "Setting",
+    "Phone",
+    "PhoneSale",
+    "PhoneInventoryPeriod",
+    "PhoneLoss",
 ]

@@ -17,11 +17,19 @@ from app.routers import (
     settings as settings_router,
     sync,
     tyres,
+    phones,
+    phone_sales,
+    phone_inventory,
+    phone_losses,
+    phone_dashboard,
+    phone_sync,
 )
 from app.models.sale import Sale
 from app.models.inventory import InventoryPeriod
+from app.models.phone_inventory import PhoneInventoryPeriod
 from app.utils.auth import hash_password
 from app.services.inventory_service import rollover_month
+from app.services.phone_inventory_service import rollover_phone_month
 
 import logging
 
@@ -55,6 +63,37 @@ async def _fix_inventory_rollover() -> None:
             if count > 0:
                 logger.info(
                     "Fixed rollover %d/%d -> %d/%d: %d records updated",
+                    from_year, from_month, to_year, to_month, count,
+                )
+        await session.commit()
+
+
+async def _fix_phone_inventory_rollover() -> None:
+    """Re-rollover phone inventory so each month's initial = previous month's remaining."""
+    async with async_session_factory() as session:
+        from sqlalchemy import func, distinct
+
+        result = await session.execute(
+            select(
+                PhoneInventoryPeriod.year,
+                PhoneInventoryPeriod.month,
+            )
+            .distinct()
+            .order_by(PhoneInventoryPeriod.year, PhoneInventoryPeriod.month)
+        )
+        periods = result.all()
+        if len(periods) < 2:
+            return
+
+        for i in range(len(periods) - 1):
+            from_year, from_month = periods[i]
+            to_year, to_month = periods[i + 1]
+            count = await rollover_phone_month(
+                session, from_year, from_month, to_year, to_month
+            )
+            if count > 0:
+                logger.info(
+                    "Fixed phone rollover %d/%d -> %d/%d: %d records updated",
                     from_year, from_month, to_year, to_month, count,
                 )
         await session.commit()
@@ -97,6 +136,7 @@ async def lifespan(app: FastAPI):
     await _seed_admin()
     await _fix_discount_format()
     await _fix_inventory_rollover()
+    await _fix_phone_inventory_rollover()
     yield
     # Shutdown (nothing to clean up)
 
@@ -126,6 +166,12 @@ app.include_router(payments.router, prefix=API_PREFIX)
 app.include_router(losses.router, prefix=API_PREFIX)
 app.include_router(sync.router, prefix=API_PREFIX)
 app.include_router(settings_router.router, prefix=API_PREFIX)
+app.include_router(phones.router, prefix=API_PREFIX)
+app.include_router(phone_sales.router, prefix=API_PREFIX)
+app.include_router(phone_inventory.router, prefix=API_PREFIX)
+app.include_router(phone_losses.router, prefix=API_PREFIX)
+app.include_router(phone_dashboard.router, prefix=API_PREFIX)
+app.include_router(phone_sync.router, prefix=API_PREFIX)
 
 
 @app.get("/health")

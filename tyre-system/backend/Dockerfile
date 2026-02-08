@@ -14,8 +14,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY app/ ./app/
 
-# Create data and excel directories
-RUN mkdir -p /app/data /app/data/excel /app/data/backups
+# Create data, excel, and phone excel directories
+RUN mkdir -p /app/data /app/data/excel /app/data/backups \
+    /app/data/phone_excel /app/data/phone_excel/invoices /app/data/phone_excel/daily
 
 EXPOSE 8000
 

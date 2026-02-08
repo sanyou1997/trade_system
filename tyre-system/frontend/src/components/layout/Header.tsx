@@ -3,6 +3,7 @@
 import { LogOut, User as UserIcon } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useState, useRef, useEffect } from 'react';
+import { useProductType } from '@/lib/product-context';
 
 interface HeaderProps {
   title: string;
@@ -10,6 +11,7 @@ interface HeaderProps {
 
 export default function Header({ title }: HeaderProps) {
   const { user, logout } = useAuth();
+  const { productType } = useProductType();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -32,9 +34,20 @@ export default function Header({ title }: HeaderProps) {
 
   return (
     <header className="flex items-center justify-between px-6 py-4 bg-white border-b border-slate-200">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-900">{title}</h1>
-        <p className="text-sm text-slate-500">{today}</p>
+      <div className="flex items-center gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-900">{title}</h1>
+          <p className="text-sm text-slate-500">{today}</p>
+        </div>
+        <span
+          className={
+            productType === 'tyre'
+              ? 'px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700'
+              : 'px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700'
+          }
+        >
+          {productType === 'tyre' ? 'Tyres' : 'Phones'}
+        </span>
       </div>
 
       <div className="relative" ref={dropdownRef}>

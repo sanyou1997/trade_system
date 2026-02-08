@@ -76,3 +76,16 @@ export function getMonthName(month: number): string {
   ];
   return months[month - 1] ?? '';
 }
+
+export function formatPhoneLabel(
+  brand?: string | null,
+  model?: string | null,
+  config?: string | null,
+  fallbackId?: number,
+): string {
+  if (!brand) return fallbackId != null ? `#${fallbackId}` : 'Unknown';
+  const parts = [brand];
+  if (model) parts.push(model);
+  if (config) parts.push(`(${config})`);
+  return parts.join(' ');
+}
