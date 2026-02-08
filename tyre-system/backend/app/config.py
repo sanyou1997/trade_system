@@ -31,7 +31,9 @@ class Settings:
 
     # CORS
     ALLOWED_ORIGINS: list[str] = [
-        "http://localhost:3000",
+        o.strip()
+        for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost").split(",")
+        if o.strip()
     ]
 
     # Business constants
