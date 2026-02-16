@@ -23,6 +23,7 @@ from app.routers import (
     phone_losses,
     phone_dashboard,
     phone_sync,
+    stock_import,
 )
 from app.models.sale import Sale
 from app.models.inventory import InventoryPeriod
@@ -172,6 +173,7 @@ app.include_router(phone_inventory.router, prefix=API_PREFIX)
 app.include_router(phone_losses.router, prefix=API_PREFIX)
 app.include_router(phone_dashboard.router, prefix=API_PREFIX)
 app.include_router(phone_sync.router, prefix=API_PREFIX)
+app.include_router(stock_import.router, prefix=API_PREFIX)
 
 
 @app.get("/health")

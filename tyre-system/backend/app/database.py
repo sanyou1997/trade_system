@@ -47,6 +47,7 @@ async def init_db() -> None:
     from app.models.phone_sale import PhoneSale  # noqa: F401
     from app.models.phone_inventory import PhoneInventoryPeriod  # noqa: F401
     from app.models.phone_loss import PhoneLoss  # noqa: F401
+    from app.models.stock_import_log import StockImportLog  # noqa: F401
     from app.models.base import Base
 
     async with engine.begin() as conn:

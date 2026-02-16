@@ -12,7 +12,11 @@ import { useAuth } from '@/hooks/useAuth';
 import { useProductType } from '@/lib/product-context';
 import { cn, formatMWK } from '@/lib/utils';
 import { InventoryItem, PhoneInventoryItem, TyreCategory } from '@/lib/types';
-import { Package, ArrowDownToLine, ArrowUpFromLine, ShoppingCart, Boxes, Search, X, AlertTriangle } from 'lucide-react';
+import Button from '@/components/ui/Button';
+import ImportStockModal from '@/components/ui/ImportStockModal';
+import ImportHistoryPanel from '@/components/ui/ImportHistoryPanel';
+import AddProductModal from '@/components/ui/AddProductModal';
+import { Package, ArrowDownToLine, ArrowUpFromLine, ShoppingCart, Boxes, Search, X, AlertTriangle, Upload, Plus } from 'lucide-react';
 
 const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => ({
   value: String(i + 1),
@@ -51,6 +55,8 @@ export default function InventoryPage() {
     field: 'initial_stock' | 'added_stock';
     value: string;
   } | null>(null);
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [addProductModalOpen, setAddProductModalOpen] = useState(false);
 
   // Tyre hooks
   const { data: tyreInventory, isLoading: tyreLoading } = useInventory({
@@ -267,6 +273,17 @@ export default function InventoryPage() {
         <Select label="Year" options={YEAR_OPTIONS} value={year} onChange={(e) => setYear(e.target.value)} className="w-28" />
         <Select label="Month" options={MONTH_OPTIONS} value={month} onChange={(e) => setMonth(e.target.value)} className="w-36" />
 
+        <div className="flex gap-2 items-end">
+          {!isTyre && (
+            <Button variant="secondary" size="sm" onClick={() => setImportModalOpen(true)}>
+              <Upload size={14} /> Import Stock
+            </Button>
+          )}
+          <Button variant="secondary" size="sm" onClick={() => setAddProductModalOpen(true)}>
+            <Plus size={14} /> Add {isTyre ? 'Tyre' : 'Phone'}
+          </Button>
+        </div>
+
         {isTyre && (
           <div className="flex gap-1 ml-auto">
             {CATEGORY_TABS.map((tab) => (
@@ -398,6 +415,21 @@ export default function InventoryPage() {
           }}
         />
       )}
+
+      {/* Import History (phone only) */}
+      {!isTyre && <ImportHistoryPanel />}
+
+      {/* Modals */}
+      <ImportStockModal
+        open={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        year={Number(year)}
+        month={Number(month)}
+      />
+      <AddProductModal
+        open={addProductModalOpen}
+        onClose={() => setAddProductModalOpen(false)}
+      />
     </MainLayout>
   );
 }

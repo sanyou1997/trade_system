@@ -1,9 +1,5 @@
 export function formatMWK(amount: number): string {
-  if (Math.abs(amount) >= 1_000_000) {
-    const millions = amount / 1_000_000;
-    return `${millions % 1 === 0 ? millions.toFixed(0) : millions.toFixed(1)}M MWK`;
-  }
-  return `${amount.toLocaleString('en-US')} MWK`;
+  return `${Math.round(amount).toLocaleString('en-US')} MWK`;
 }
 
 export function formatNumber(amount: number): string {

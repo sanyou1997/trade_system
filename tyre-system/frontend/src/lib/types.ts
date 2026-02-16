@@ -326,3 +326,47 @@ export interface PhoneLossCreate {
   refund_amount: number;
   notes: string;
 }
+
+// --- Stock Import Types ---
+
+export interface ImportPreviewItem {
+  row_number: number;
+  brand: string;
+  model: string;
+  config: string;
+  quantity: number;
+  matched: boolean;
+  phone_id: number | null;
+  current_added_stock: number | null;
+}
+
+export interface ImportPreviewResult {
+  file_name: string;
+  total_rows: number;
+  matched_rows: number;
+  unmatched_rows: number;
+  total_quantity: number;
+  items: ImportPreviewItem[];
+  all_matched: boolean;
+}
+
+export interface ImportConfirmItem {
+  phone_id: number;
+  quantity: number;
+  brand: string;
+  model: string;
+  config: string;
+}
+
+export interface StockImportLogEntry {
+  id: number;
+  product_type: string;
+  year: number;
+  month: number;
+  file_name: string;
+  total_quantity: number;
+  total_products: number;
+  status: 'active' | 'reverted';
+  reverted_at: string | null;
+  created_at: string;
+}

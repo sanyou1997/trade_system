@@ -132,6 +132,23 @@ export const api = {
       headers: {},
     });
   },
+
+  uploadWithParams<T>(
+    endpoint: string,
+    file: File,
+    params: Record<string, string>,
+    fieldName = 'file',
+  ): Promise<T> {
+    const qs = new URLSearchParams(params).toString();
+    const url = qs ? `${endpoint}?${qs}` : endpoint;
+    const formData = new FormData();
+    formData.append(fieldName, file);
+    return apiClient<T>(url, {
+      method: 'POST',
+      body: formData,
+      headers: {},
+    });
+  },
 };
 
 export { ApiError };

@@ -11,6 +11,7 @@ from app.models.phone import Phone
 from app.models.phone_sale import PhoneSale
 from app.models.phone_inventory import PhoneInventoryPeriod
 from app.models.phone_loss import PhoneLoss
+from app.models.stock_import_log import StockImportLog
 
 __all__ = [
     "Tyre",
@@ -26,4 +27,5 @@ __all__ = [
     "PhoneSale",
     "PhoneInventoryPeriod",
     "PhoneLoss",
+    "StockImportLog",
 ]

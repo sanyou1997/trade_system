@@ -21,6 +21,7 @@ services:
       - PHONE_EXCEL_DIR=/app/data/phone_excel
       - PHONE_INVOICE_DIR=/app/data/phone_excel/invoices
       - PHONE_DAILY_DIR=/app/data/phone_excel/daily
+      - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001,http://localhost
     restart: unless-stopped
 
   frontend:
