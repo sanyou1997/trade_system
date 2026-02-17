@@ -11,6 +11,7 @@ import {
   AlertTriangle,
   FileSpreadsheet,
   Settings,
+  Wallet,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
@@ -26,6 +27,7 @@ const navItems = [
   { href: '/payments', label: 'Payments', icon: CreditCard },
   { href: '/losses', label: 'Losses', icon: AlertTriangle },
   { href: '/sync', label: 'Excel Sync', icon: FileSpreadsheet },
+  { href: '/audit', label: 'Cost & Audit', icon: Wallet },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 

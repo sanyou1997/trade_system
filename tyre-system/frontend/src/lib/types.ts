@@ -370,3 +370,122 @@ export interface StockImportLogEntry {
   reverted_at: string | null;
   created_at: string;
 }
+
+// --- Audit / Cost Types ---
+
+export type TransactionType = 'expense' | 'transfer' | 'exchange' | 'income';
+
+export interface AuditAccount {
+  id: number;
+  name: string;
+  description: string | null;
+  initial_balance: number;
+  is_default: boolean;
+  created_at: string;
+}
+
+export interface AuditAccountCreate {
+  name: string;
+  description?: string;
+  initial_balance: number;
+  is_default: boolean;
+}
+
+export interface AuditAccountUpdate {
+  name?: string;
+  description?: string;
+  initial_balance?: number;
+  is_default?: boolean;
+}
+
+export interface AccountBalance {
+  id: number;
+  name: string;
+  description: string | null;
+  initial_balance: number;
+  is_default: boolean;
+  prev_balance: number;
+  has_override: boolean;
+  auto_revenue: number;
+  manual_income: number;
+  total_expenses: number;
+  total_exchanges: number;
+  transfers_in: number;
+  transfers_out: number;
+  calculated_balance: number;
+}
+
+export interface RevenueBreakdown {
+  tyre_cash: number;
+  tyre_mukuru: number;
+  tyre_card: number;
+  tyre_total: number;
+  phone_cash: number;
+  phone_mukuru: number;
+  phone_card: number;
+  phone_total: number;
+  grand_total: number;
+}
+
+export interface AuditTransaction {
+  id: number;
+  transaction_type: TransactionType;
+  transaction_date: string;
+  description: string | null;
+  amount_mwk: number;
+  note: string | null;
+  account_id: number | null;
+  receipt_info: string | null;
+  receipt_image: string | null;
+  from_account_id: number | null;
+  to_account_id: number | null;
+  exchange_rate: number | null;
+  amount_cny: number | null;
+  created_at: string;
+  account_name: string | null;
+  from_account_name: string | null;
+  to_account_name: string | null;
+}
+
+export interface ExpenseCreate {
+  transaction_date: string;
+  description: string;
+  amount_mwk: number;
+  account_id: number;
+  receipt_info?: string;
+  note?: string;
+}
+
+export interface TransferCreate {
+  transaction_date: string;
+  amount_mwk: number;
+  from_account_id: number;
+  to_account_id: number;
+  description?: string;
+  note?: string;
+}
+
+export interface ExchangeCreate {
+  transaction_date: string;
+  amount_mwk: number;
+  exchange_rate: number;
+  amount_cny: number;
+  account_id: number;
+  description?: string;
+  note?: string;
+}
+
+export interface IncomeCreate {
+  transaction_date: string;
+  description: string;
+  amount_mwk: number;
+  account_id: number;
+  note?: string;
+}
+
+export interface AuditImportResult {
+  expenses_imported: number;
+  exchanges_imported: number;
+  skipped: number;
+  errors: string[];
+}

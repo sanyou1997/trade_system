@@ -37,6 +37,9 @@ class Settings:
         str(_DEFAULT_PHONE_EXCEL_DIR / "Sale Record" / "\u9500\u552e\u8868\u683c"),
     ))
 
+    # Receipts
+    RECEIPTS_DIR: Path = DATA_DIR / "receipts"
+
     # Database
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL",

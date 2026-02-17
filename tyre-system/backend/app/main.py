@@ -24,6 +24,7 @@ from app.routers import (
     phone_dashboard,
     phone_sync,
     stock_import,
+    audit,
 )
 from app.models.sale import Sale
 from app.models.inventory import InventoryPeriod
@@ -129,12 +130,32 @@ async def _seed_admin() -> None:
         await session.commit()
 
 
+async def _seed_audit_accounts() -> None:
+    """Create default audit accounts (Martin, Anna, Hawa) if none exist."""
+    from app.models.audit_account import AuditAccount
+
+    async with async_session_factory() as session:
+        result = await session.execute(select(AuditAccount).limit(1))
+        if result.scalar_one_or_none() is not None:
+            return
+
+        defaults = [
+            AuditAccount(name="Martin", description="Martin's account", initial_balance=0.0, is_default=True),
+            AuditAccount(name="Anna", description="Anna's account", initial_balance=0.0, is_default=False),
+            AuditAccount(name="Hawa", description="Hawa's account", initial_balance=0.0, is_default=False),
+        ]
+        session.add_all(defaults)
+        await session.commit()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     settings.DATA_DIR.mkdir(parents=True, exist_ok=True)
+    settings.RECEIPTS_DIR.mkdir(parents=True, exist_ok=True)
     await init_db()
     await _seed_admin()
+    await _seed_audit_accounts()
     await _fix_discount_format()
     await _fix_inventory_rollover()
     await _fix_phone_inventory_rollover()
@@ -174,6 +195,7 @@ app.include_router(phone_losses.router, prefix=API_PREFIX)
 app.include_router(phone_dashboard.router, prefix=API_PREFIX)
 app.include_router(phone_sync.router, prefix=API_PREFIX)
 app.include_router(stock_import.router, prefix=API_PREFIX)
+app.include_router(audit.router, prefix=API_PREFIX)
 
 
 @app.get("/health")

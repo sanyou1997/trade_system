@@ -12,6 +12,9 @@ from app.models.phone_sale import PhoneSale
 from app.models.phone_inventory import PhoneInventoryPeriod
 from app.models.phone_loss import PhoneLoss
 from app.models.stock_import_log import StockImportLog
+from app.models.audit_account import AuditAccount
+from app.models.audit_transaction import AuditTransaction
+from app.models.audit_balance_override import AuditBalanceOverride
 
 __all__ = [
     "Tyre",
@@ -28,4 +31,7 @@ __all__ = [
     "PhoneInventoryPeriod",
     "PhoneLoss",
     "StockImportLog",
+    "AuditAccount",
+    "AuditTransaction",
+    "AuditBalanceOverride",
 ]
