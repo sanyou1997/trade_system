@@ -16,6 +16,7 @@ import Button from '@/components/ui/Button';
 import ImportStockModal from '@/components/ui/ImportStockModal';
 import ImportHistoryPanel from '@/components/ui/ImportHistoryPanel';
 import AddProductModal from '@/components/ui/AddProductModal';
+import PriceEditModal from '@/components/ui/PriceEditModal';
 import { Package, ArrowDownToLine, ArrowUpFromLine, ShoppingCart, Boxes, Search, X, AlertTriangle, Upload, Plus } from 'lucide-react';
 
 const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => ({
@@ -57,6 +58,12 @@ export default function InventoryPage() {
   } | null>(null);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [addProductModalOpen, setAddProductModalOpen] = useState(false);
+  const [priceEditModal, setPriceEditModal] = useState<{
+    productId: number;
+    productType: 'tyre' | 'phone';
+    productLabel: string;
+    currentPrices: Record<string, number>;
+  } | null>(null);
 
   // Tyre hooks
   const { data: tyreInventory, isLoading: tyreLoading } = useInventory({
@@ -244,7 +251,20 @@ export default function InventoryPage() {
     { key: 'type', label: 'Type' },
     { key: 'brand', label: 'Brand', sortable: true },
     { key: 'pattern', label: 'Pattern' },
-    { key: 'suggested_price', label: 'Price', sortable: true, render: (item) => formatMWK(item.suggested_price) },
+    { key: 'suggested_price', label: 'Price', sortable: true, render: (item) => (
+      <button
+        className="hover:bg-blue-50 px-1 py-0.5 rounded cursor-pointer text-left"
+        onClick={() => setPriceEditModal({
+          productId: item.tyre_id,
+          productType: 'tyre',
+          productLabel: `${item.size} ${item.brand || ''}`.trim(),
+          currentPrices: { suggested_price: item.suggested_price },
+        })}
+        title="Click to edit price"
+      >
+        {formatMWK(item.suggested_price)}
+      </button>
+    ) },
     { key: 'initial_stock', label: 'Initial', sortable: true, className: 'text-center', render: (item) => renderEditableCell(item.tyre_id, 'initial_stock', item.initial_stock) },
     { key: 'added_stock', label: 'Added', sortable: true, className: 'text-center', render: (item) => renderEditableCell(item.tyre_id, 'added_stock', item.added_stock) },
     { key: 'total_sold', label: 'Sold', sortable: true, className: 'text-center' },
@@ -256,9 +276,45 @@ export default function InventoryPage() {
     { key: 'brand', label: 'Brand', sortable: true },
     { key: 'model', label: 'Model', sortable: true },
     { key: 'config', label: 'Config' },
-    { key: 'cash_price', label: 'Cash Price', sortable: true, render: (item) => formatMWK(item.cash_price) },
-    { key: 'mukuru_price', label: 'Mukuru Price', render: (item) => formatMWK(item.mukuru_price) },
-    { key: 'online_price', label: 'Online Price', render: (item) => formatMWK(item.online_price) },
+    { key: 'cash_price', label: 'Cash Price', sortable: true, render: (item) => {
+      const openModal = () => setPriceEditModal({
+        productId: item.phone_id,
+        productType: 'phone',
+        productLabel: `${item.brand} ${item.model}`.trim(),
+        currentPrices: { cash_price: item.cash_price, mukuru_price: item.mukuru_price, online_price: item.online_price },
+      });
+      return (
+        <button className="hover:bg-blue-50 px-1 py-0.5 rounded cursor-pointer text-left" onClick={openModal} title="Click to edit prices">
+          {formatMWK(item.cash_price)}
+        </button>
+      );
+    } },
+    { key: 'mukuru_price', label: 'Mukuru Price', render: (item) => {
+      const openModal = () => setPriceEditModal({
+        productId: item.phone_id,
+        productType: 'phone',
+        productLabel: `${item.brand} ${item.model}`.trim(),
+        currentPrices: { cash_price: item.cash_price, mukuru_price: item.mukuru_price, online_price: item.online_price },
+      });
+      return (
+        <button className="hover:bg-blue-50 px-1 py-0.5 rounded cursor-pointer text-left" onClick={openModal} title="Click to edit prices">
+          {formatMWK(item.mukuru_price)}
+        </button>
+      );
+    } },
+    { key: 'online_price', label: 'Online Price', render: (item) => {
+      const openModal = () => setPriceEditModal({
+        productId: item.phone_id,
+        productType: 'phone',
+        productLabel: `${item.brand} ${item.model}`.trim(),
+        currentPrices: { cash_price: item.cash_price, mukuru_price: item.mukuru_price, online_price: item.online_price },
+      });
+      return (
+        <button className="hover:bg-blue-50 px-1 py-0.5 rounded cursor-pointer text-left" onClick={openModal} title="Click to edit prices">
+          {formatMWK(item.online_price)}
+        </button>
+      );
+    } },
     { key: 'initial_stock', label: 'Initial', sortable: true, className: 'text-center', render: (item) => renderEditableCell(item.phone_id, 'initial_stock', item.initial_stock) },
     { key: 'added_stock', label: 'Added', sortable: true, className: 'text-center', render: (item) => renderEditableCell(item.phone_id, 'added_stock', item.added_stock) },
     { key: 'total_sold', label: 'Sold', sortable: true, className: 'text-center' },
@@ -274,11 +330,9 @@ export default function InventoryPage() {
         <Select label="Month" options={MONTH_OPTIONS} value={month} onChange={(e) => setMonth(e.target.value)} className="w-36" />
 
         <div className="flex gap-2 items-end">
-          {!isTyre && (
-            <Button variant="secondary" size="sm" onClick={() => setImportModalOpen(true)}>
-              <Upload size={14} /> Import Stock
-            </Button>
-          )}
+          <Button variant="secondary" size="sm" onClick={() => setImportModalOpen(true)}>
+            <Upload size={14} /> Import Stock
+          </Button>
           <Button variant="secondary" size="sm" onClick={() => setAddProductModalOpen(true)}>
             <Plus size={14} /> Add {isTyre ? 'Tyre' : 'Phone'}
           </Button>
@@ -416,8 +470,8 @@ export default function InventoryPage() {
         />
       )}
 
-      {/* Import History (phone only) */}
-      {!isTyre && <ImportHistoryPanel />}
+      {/* Import History */}
+      <ImportHistoryPanel productType={isTyre ? 'tyre' : 'phone'} />
 
       {/* Modals */}
       <ImportStockModal
@@ -425,10 +479,19 @@ export default function InventoryPage() {
         onClose={() => setImportModalOpen(false)}
         year={Number(year)}
         month={Number(month)}
+        productType={isTyre ? 'tyre' : 'phone'}
       />
       <AddProductModal
         open={addProductModalOpen}
         onClose={() => setAddProductModalOpen(false)}
+      />
+      <PriceEditModal
+        open={priceEditModal !== null}
+        onClose={() => setPriceEditModal(null)}
+        productType={priceEditModal?.productType ?? 'tyre'}
+        productId={priceEditModal?.productId ?? 0}
+        productLabel={priceEditModal?.productLabel ?? ''}
+        currentPrices={priceEditModal?.currentPrices ?? {}}
       />
     </MainLayout>
   );

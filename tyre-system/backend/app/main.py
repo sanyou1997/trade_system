@@ -13,6 +13,7 @@ from app.routers import (
     inventory,
     losses,
     payments,
+    prices,
     sales,
     settings as settings_router,
     sync,
@@ -188,6 +189,7 @@ app.include_router(payments.router, prefix=API_PREFIX)
 app.include_router(losses.router, prefix=API_PREFIX)
 app.include_router(sync.router, prefix=API_PREFIX)
 app.include_router(settings_router.router, prefix=API_PREFIX)
+app.include_router(prices.router, prefix=API_PREFIX)
 app.include_router(phones.router, prefix=API_PREFIX)
 app.include_router(phone_sales.router, prefix=API_PREFIX)
 app.include_router(phone_inventory.router, prefix=API_PREFIX)

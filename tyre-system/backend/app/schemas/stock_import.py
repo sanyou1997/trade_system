@@ -32,6 +32,45 @@ class ImportConfirmItem(BaseModel):
     config: str
 
 
+class TyreImportPreviewItem(BaseModel):
+    row_number: int
+    size: str
+    type_: str
+    brand: str
+    pattern: str
+    li_sr: str
+    tyre_cost: float
+    suggested_price: float
+    quantity: int
+    matched: bool
+    tyre_id: int | None = None
+    current_added_stock: int | None = None
+
+
+class TyreImportPreviewResult(BaseModel):
+    file_name: str
+    total_rows: int
+    matched_rows: int
+    unmatched_rows: int
+    total_quantity: int
+    items: list[TyreImportPreviewItem]
+    all_matched: bool
+
+
+class TyreImportConfirmItem(BaseModel):
+    tyre_id: int | None = None
+    quantity: int = Field(..., gt=0)
+    create_new: bool = False
+    size: str = ""
+    type_: str = ""
+    brand: str = ""
+    pattern: str = ""
+    li_sr: str = ""
+    tyre_cost: float = 0.0
+    suggested_price: float = 0.0
+    category: str = "branded_new"
+
+
 class StockImportLogResponse(BaseModel):
     id: int
     product_type: str

@@ -10,10 +10,14 @@ import { useToast } from './Toast';
 import { ChevronDown, ChevronUp, Undo2, History } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 
-export default function ImportHistoryPanel() {
+interface ImportHistoryPanelProps {
+  productType?: string;
+}
+
+export default function ImportHistoryPanel({ productType = 'phone' }: ImportHistoryPanelProps) {
   const { toast } = useToast();
   const [expanded, setExpanded] = useState(false);
-  const { data: history, isLoading } = useStockImportHistory('phone');
+  const { data: history, isLoading } = useStockImportHistory(productType);
   const revertMutation = useStockImportRevert();
 
   async function handleRevert(log: StockImportLogEntry) {

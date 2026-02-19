@@ -13,6 +13,7 @@ COPY . .
 ARG NEXT_PUBLIC_API_URL=http://localhost/api/v1
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_OPTIONS="--max-old-space-size=512"
 
 RUN npm run build
 

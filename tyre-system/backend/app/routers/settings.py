@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.exchange_rate import ExchangeRate, RateType
 from app.models.setting import Setting
+from app.models.phone import Phone
 from app.models.tyre import Tyre
 from app.schemas.common import ApiResponse
 
@@ -162,6 +163,28 @@ async def update_cash_rate(
             })
             tyre.suggested_price = new_price
 
+    # Recalculate all phone prices
+    result = await db.execute(select(Phone))
+    phones = result.scalars().all()
+
+    phone_changes = []
+    for phone in phones:
+        updated = False
+        for price_field in ("cash_price", "mukuru_price", "online_price"):
+            old_price = getattr(phone, price_field)
+            if old_price <= 0:
+                continue
+            new_price = _round_to_k(old_price / old_rate * new_rate)
+            if new_price != old_price:
+                setattr(phone, price_field, new_price)
+                updated = True
+        if updated:
+            phone_changes.append({
+                "phone_id": phone.id,
+                "brand": phone.brand,
+                "model": phone.model,
+            })
+
     # Update the cash_rate setting
     if setting is None:
         setting = Setting(key="cash_rate", value=str(new_rate))
@@ -175,5 +198,7 @@ async def update_cash_rate(
         "old_rate": old_rate,
         "new_rate": new_rate,
         "tyres_updated": len(changes),
+        "phones_updated": len(phone_changes),
         "changes": changes,
+        "phone_changes": phone_changes,
     })

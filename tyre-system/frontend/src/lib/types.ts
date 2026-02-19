@@ -371,6 +371,47 @@ export interface StockImportLogEntry {
   created_at: string;
 }
 
+// --- Tyre Stock Import Types ---
+
+export interface TyreImportPreviewItem {
+  row_number: number;
+  size: string;
+  type_: string;
+  brand: string;
+  pattern: string;
+  li_sr: string;
+  tyre_cost: number;
+  suggested_price: number;
+  quantity: number;
+  matched: boolean;
+  tyre_id: number | null;
+  current_added_stock: number | null;
+}
+
+export interface TyreImportPreviewResult {
+  file_name: string;
+  total_rows: number;
+  matched_rows: number;
+  unmatched_rows: number;
+  total_quantity: number;
+  items: TyreImportPreviewItem[];
+  all_matched: boolean;
+}
+
+export interface TyreImportConfirmItem {
+  tyre_id: number | null;
+  quantity: number;
+  create_new: boolean;
+  size: string;
+  type_: string;
+  brand: string;
+  pattern: string;
+  li_sr: string;
+  tyre_cost: number;
+  suggested_price: number;
+  category: string;
+}
+
 // --- Audit / Cost Types ---
 
 export type TransactionType = 'expense' | 'transfer' | 'exchange' | 'income';
