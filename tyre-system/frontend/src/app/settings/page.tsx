@@ -10,6 +10,7 @@ import Badge from '@/components/ui/Badge';
 import Table, { Column } from '@/components/ui/Table';
 import { useToast } from '@/components/ui/Toast';
 import { useAuth } from '@/hooks/useAuth';
+import { SETTINGS_DICT_KEY } from '@/hooks/useSettings';
 import { api } from '@/lib/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { User } from '@/lib/types';
@@ -55,6 +56,7 @@ export default function SettingsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings'] });
+      queryClient.invalidateQueries({ queryKey: SETTINGS_DICT_KEY });
       toast('success', 'Mukuru rate saved.');
     },
     onError: (err) => {
@@ -74,6 +76,7 @@ export default function SettingsPage() {
     onSuccess: async (data) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['settings'] }),
+        queryClient.invalidateQueries({ queryKey: SETTINGS_DICT_KEY }),
         queryClient.invalidateQueries({ queryKey: ['tyres'] }),
         queryClient.invalidateQueries({ queryKey: ['inventory'] }),
         queryClient.invalidateQueries({ queryKey: ['dashboard'] }),

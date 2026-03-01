@@ -2,6 +2,10 @@ export function formatMWK(amount: number): string {
   return `${Math.round(amount).toLocaleString('en-US')} MWK`;
 }
 
+export function roundTo1000(value: number): number {
+  return Math.floor(value / 1000 + 0.5) * 1000;
+}
+
 export function formatNumber(amount: number): string {
   return amount.toLocaleString('en-US');
 }

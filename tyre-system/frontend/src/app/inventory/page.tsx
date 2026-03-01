@@ -10,7 +10,8 @@ import { useInventory, useUpdateStock } from '@/hooks/useInventory';
 import { usePhoneInventory, useUpdatePhoneStock } from '@/hooks/usePhoneInventory';
 import { useAuth } from '@/hooks/useAuth';
 import { useProductType } from '@/lib/product-context';
-import { cn, formatMWK } from '@/lib/utils';
+import { cn, formatMWK, roundTo1000 } from '@/lib/utils';
+import { useSettings } from '@/hooks/useSettings';
 import { InventoryItem, PhoneInventoryItem, TyreCategory } from '@/lib/types';
 import Button from '@/components/ui/Button';
 import ImportStockModal from '@/components/ui/ImportStockModal';
@@ -41,6 +42,9 @@ export default function InventoryPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const { isTyre } = useProductType();
+  const { data: settingsData } = useSettings();
+  const cashRate = settingsData?.cash_rate ? Number(settingsData.cash_rate) : 0;
+  const mukuruRate = settingsData?.mukuru_rate ? Number(settingsData.mukuru_rate) : 0;
   const now = new Date();
 
   const [year, setYear] = useState(String(now.getFullYear()));
@@ -246,12 +250,17 @@ export default function InventoryPage() {
     );
   }
 
+  function calculateMukuruPrice(suggestedPrice: number): number {
+    if (cashRate <= 0 || mukuruRate <= 0) return 0;
+    return roundTo1000(suggestedPrice * mukuruRate / cashRate);
+  }
+
   const tyreColumns: Column<InventoryItem>[] = [
     { key: 'size', label: 'Size', sortable: true },
     { key: 'type', label: 'Type' },
     { key: 'brand', label: 'Brand', sortable: true },
     { key: 'pattern', label: 'Pattern' },
-    { key: 'suggested_price', label: 'Price', sortable: true, render: (item) => (
+    { key: 'suggested_price', label: 'Cash Price', sortable: true, render: (item) => (
       <button
         className="hover:bg-blue-50 px-1 py-0.5 rounded cursor-pointer text-left"
         onClick={() => setPriceEditModal({
@@ -265,6 +274,12 @@ export default function InventoryPage() {
         {formatMWK(item.suggested_price)}
       </button>
     ) },
+    { key: 'mukuru_price' as keyof InventoryItem, label: 'Mukuru Price', render: (item) => {
+      const mp = calculateMukuruPrice(item.suggested_price);
+      return mp > 0
+        ? <span className="text-slate-700">{formatMWK(mp)}</span>
+        : <span className="text-slate-400 text-xs">N/A</span>;
+    } },
     { key: 'initial_stock', label: 'Initial', sortable: true, className: 'text-center', render: (item) => renderEditableCell(item.tyre_id, 'initial_stock', item.initial_stock) },
     { key: 'added_stock', label: 'Added', sortable: true, className: 'text-center', render: (item) => renderEditableCell(item.tyre_id, 'added_stock', item.added_stock) },
     { key: 'total_sold', label: 'Sold', sortable: true, className: 'text-center' },

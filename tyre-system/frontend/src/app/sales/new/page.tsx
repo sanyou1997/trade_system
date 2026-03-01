@@ -20,8 +20,10 @@ import {
   formatNumber,
   formatTyreLabel,
   formatPhoneLabel,
+  roundTo1000,
   cn,
 } from '@/lib/utils';
+import { useSettings } from '@/hooks/useSettings';
 import {
   Sale,
   PhoneSale,
@@ -92,7 +94,19 @@ function tyreMatchesFilter(tyre: TyreWithStock, filter: ReturnType<typeof parseS
 export default function RecordSalePage() {
   const { toast } = useToast();
   const { isTyre } = useProductType();
+  const { data: settingsData } = useSettings();
+  const cashRate = settingsData?.cash_rate ? Number(settingsData.cash_rate) : 0;
+  const mukuruRate = settingsData?.mukuru_rate ? Number(settingsData.mukuru_rate) : 0;
   const today = formatDateISO(new Date());
+
+  function getTyreMukuruPrice(suggestedPrice: number): number {
+    if (cashRate <= 0 || mukuruRate <= 0) return suggestedPrice;
+    return roundTo1000(suggestedPrice * mukuruRate / cashRate);
+  }
+
+  function getTyrePriceForMethod(suggestedPrice: number, method: string): number {
+    return method === 'Mukuru' ? getTyreMukuruPrice(suggestedPrice) : suggestedPrice;
+  }
 
   const [saleDate, setSaleDate] = useState(today);
   const [productId, setProductId] = useState('');
@@ -184,7 +198,7 @@ export default function RecordSalePage() {
   const handleTyreSelect = (tyre: TyreWithStock) => {
     setProductId(String(tyre.id));
     setSearchQuery(`${tyre.size} - ${tyre.brand || 'No Brand'}`);
-    setUnitPrice(String(tyre.suggested_price));
+    setUnitPrice(String(getTyrePriceForMethod(tyre.suggested_price, paymentMethod)));
     setDropdownOpen(false);
   };
 
@@ -515,7 +529,13 @@ export default function RecordSalePage() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Select label="Payment Method" options={PAYMENT_OPTIONS} value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} />
+                <Select label="Payment Method" options={PAYMENT_OPTIONS} value={paymentMethod} onChange={(e) => {
+                  const method = e.target.value;
+                  setPaymentMethod(method);
+                  if (isTyre && selectedTyre) {
+                    setUnitPrice(String(getTyrePriceForMethod(selectedTyre.suggested_price, method)));
+                  }
+                }} />
                 <Input label="Customer Name" type="text" value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Optional" />
               </div>
 
