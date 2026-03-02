@@ -418,7 +418,41 @@ async def _cumulative_balance_through(
     db: AsyncSession, account_id: int, is_default: bool,
     year: int, month: int, initial_balance: float,
 ) -> float:
-    """Full cumulative balance for an account through the given year/month."""
+    """Full cumulative balance for an account through the given year/month.
+
+    If a manual override exists at or before the target month, use it as the
+    base and only add activity (revenue + transactions) from the override month
+    forward.  This ensures that month N+1's opening balance equals month N's
+    ending balance even when month N had a manual override.
+    """
+    latest_override = await _find_latest_override(db, account_id, year, month)
+
+    if latest_override:
+        base = latest_override.override_balance
+        ov_y, ov_m = latest_override.year, latest_override.month
+        before_y, before_m = _prev_month(ov_y, ov_m)
+
+        # Revenue from override month through target month
+        revenue_delta = 0.0
+        if is_default:
+            rev_through_target = await _cumulative_revenue(db, year, month)
+            rev_through_before = await _cumulative_revenue(
+                db, before_y, before_m
+            )
+            revenue_delta = rev_through_target - rev_through_before
+
+        # Transactions from override month through target month
+        txn_through_target = await _calculate_account_balance(
+            db, account_id, year, month
+        )
+        txn_through_before = await _calculate_account_balance(
+            db, account_id, before_y, before_m
+        )
+        txn_delta = txn_through_target - txn_through_before
+
+        return base + revenue_delta + txn_delta
+
+    # No overrides: use initial_balance as base with full cumulative sums
     revenue = 0.0
     if is_default:
         revenue = await _cumulative_revenue(db, year, month)
@@ -437,6 +471,29 @@ async def _get_override(
             AuditBalanceOverride.year == year,
             AuditBalanceOverride.month == month,
         )
+    )
+    return result.scalar_one_or_none()
+
+
+async def _find_latest_override(
+    db: AsyncSession, account_id: int, year: int, month: int
+) -> AuditBalanceOverride | None:
+    """Find the most recent balance override at or before the given (year, month)."""
+    result = await db.execute(
+        select(AuditBalanceOverride)
+        .where(
+            AuditBalanceOverride.account_id == account_id,
+            (AuditBalanceOverride.year < year)
+            | (
+                (AuditBalanceOverride.year == year)
+                & (AuditBalanceOverride.month <= month)
+            ),
+        )
+        .order_by(
+            AuditBalanceOverride.year.desc(),
+            AuditBalanceOverride.month.desc(),
+        )
+        .limit(1)
     )
     return result.scalar_one_or_none()
 
