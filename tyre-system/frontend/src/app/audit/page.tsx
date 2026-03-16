@@ -723,7 +723,7 @@ export default function AuditPage() {
       {/* Section 2: Revenue Breakdown */}
       {revenue && (
         <Card title="Revenue This Month (Auto-calculated)" className="mb-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <p className="text-xs font-medium text-slate-500 mb-1">Tyre Sales</p>
               <div className="text-sm space-y-0.5">
@@ -763,6 +763,27 @@ export default function AuditPage() {
                 <div className="flex justify-between pt-1 border-t border-slate-100 font-semibold">
                   <span>Total</span>
                   <span>{formatMWK(revenue.phone_total)}</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-slate-500 mb-1">Others Sales</p>
+              <div className="text-sm space-y-0.5">
+                <div className="flex justify-between">
+                  <span className="text-slate-600">Cash</span>
+                  <span className="font-medium">{formatMWK(revenue.other_cash)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-600">Mukuru</span>
+                  <span className="font-medium">{formatMWK(revenue.other_mukuru)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-600">Card</span>
+                  <span className="font-medium">{formatMWK(revenue.other_card)}</span>
+                </div>
+                <div className="flex justify-between pt-1 border-t border-slate-100 font-semibold">
+                  <span>Total</span>
+                  <span>{formatMWK(revenue.other_total)}</span>
                 </div>
               </div>
             </div>

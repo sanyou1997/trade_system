@@ -8,11 +8,12 @@ import Table, { Column } from '@/components/ui/Table';
 import { useToast } from '@/components/ui/Toast';
 import { useInventory, useUpdateStock } from '@/hooks/useInventory';
 import { usePhoneInventory, useUpdatePhoneStock } from '@/hooks/usePhoneInventory';
+import { useOtherInventory, useUpdateOtherStock } from '@/hooks/useOtherInventory';
 import { useAuth } from '@/hooks/useAuth';
 import { useProductType } from '@/lib/product-context';
 import { cn, formatMWK, roundTo1000 } from '@/lib/utils';
 import { useSettings } from '@/hooks/useSettings';
-import { InventoryItem, PhoneInventoryItem, TyreCategory } from '@/lib/types';
+import { InventoryItem, PhoneInventoryItem, OtherInventoryItem, TyreCategory } from '@/lib/types';
 import Button from '@/components/ui/Button';
 import ImportStockModal from '@/components/ui/ImportStockModal';
 import ImportHistoryPanel from '@/components/ui/ImportHistoryPanel';
@@ -41,7 +42,7 @@ const CATEGORY_TABS: { value: TyreCategory | 'all'; label: string }[] = [
 export default function InventoryPage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { isTyre } = useProductType();
+  const { isTyre, isPhone, isOther } = useProductType();
   const { data: settingsData } = useSettings();
   const cashRate = settingsData?.cash_rate ? Number(settingsData.cash_rate) : 0;
   const mukuruRate = settingsData?.mukuru_rate ? Number(settingsData.mukuru_rate) : 0;
@@ -64,7 +65,7 @@ export default function InventoryPage() {
   const [addProductModalOpen, setAddProductModalOpen] = useState(false);
   const [priceEditModal, setPriceEditModal] = useState<{
     productId: number;
-    productType: 'tyre' | 'phone';
+    productType: 'tyre' | 'phone' | 'other';
     productLabel: string;
     currentPrices: Record<string, number>;
   } | null>(null);
@@ -83,9 +84,16 @@ export default function InventoryPage() {
   );
   const updatePhoneStock = useUpdatePhoneStock();
 
-  const isLoading = isTyre ? tyreLoading : phoneLoading;
+  // Other hooks
+  const { data: otherInventory, isLoading: otherLoading } = useOtherInventory(
+    Number(year),
+    Number(month),
+  );
+  const updateOtherStock = useUpdateOtherStock();
 
-  // Brand options
+  const isLoading = isTyre ? tyreLoading : isPhone ? phoneLoading : otherLoading;
+
+  // Brand options (tyres/phones have brand; others have category)
   const brandOptions = useMemo(() => {
     if (isTyre) {
       if (!tyreInventory) return [];
@@ -93,11 +101,17 @@ export default function InventoryPage() {
       for (const item of tyreInventory) if (item.brand) brands.add(item.brand);
       return Array.from(brands).sort();
     }
-    if (!phoneInventory) return [];
-    const brands = new Set<string>();
-    for (const item of phoneInventory) if (item.brand) brands.add(item.brand);
-    return Array.from(brands).sort();
-  }, [isTyre, tyreInventory, phoneInventory]);
+    if (isPhone) {
+      if (!phoneInventory) return [];
+      const brands = new Set<string>();
+      for (const item of phoneInventory) if (item.brand) brands.add(item.brand);
+      return Array.from(brands).sort();
+    }
+    if (!otherInventory) return [];
+    const categories = new Set<string>();
+    for (const item of otherInventory) if (item.category) categories.add(item.category);
+    return Array.from(categories).sort();
+  }, [isTyre, isPhone, tyreInventory, phoneInventory, otherInventory]);
 
   // Tyre display data
   const tyreDisplayData = useMemo(() => {
@@ -148,6 +162,30 @@ export default function InventoryPage() {
     return items;
   }, [phoneInventory, brandFilter, inStockOnly, searchQuery, sortKey, sortDir]);
 
+  // Other display data
+  const otherDisplayData = useMemo(() => {
+    let items = otherInventory ?? [];
+    if (brandFilter !== 'all') items = items.filter((i) => i.category === brandFilter);
+    if (inStockOnly) items = items.filter((i) => i.remaining_stock > 0);
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      items = items.filter((i) => {
+        const searchable = `${i.name} ${i.category || ''} ${i.note || ''}`.toLowerCase();
+        return searchable.includes(q);
+      });
+    }
+    if (sortKey) {
+      const dir = sortDir === 'asc' ? 1 : -1;
+      items = [...items].sort((a, b) => {
+        const av = (a as unknown as Record<string, unknown>)[sortKey];
+        const bv = (b as unknown as Record<string, unknown>)[sortKey];
+        if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
+        return String(av ?? '').localeCompare(String(bv ?? '')) * dir;
+      });
+    }
+    return items;
+  }, [otherInventory, brandFilter, inStockOnly, searchQuery, sortKey, sortDir]);
+
   const summary = useMemo(() => {
     if (isTyre) {
       const items = tyreDisplayData;
@@ -161,7 +199,19 @@ export default function InventoryPage() {
         totalValue: items.reduce((sum, i) => sum + i.remaining_stock * i.suggested_price, 0),
       };
     }
-    const items = phoneDisplayData;
+    if (isPhone) {
+      const items = phoneDisplayData;
+      return {
+        totalSKUs: items.length,
+        totalInitial: items.reduce((sum, i) => sum + i.initial_stock, 0),
+        totalAdded: items.reduce((sum, i) => sum + i.added_stock, 0),
+        totalSold: items.reduce((sum, i) => sum + i.total_sold, 0),
+        totalLoss: items.reduce((sum, i) => sum + i.total_loss, 0),
+        totalRemaining: items.reduce((sum, i) => sum + i.remaining_stock, 0),
+        totalValue: items.reduce((sum, i) => sum + i.remaining_stock * i.cash_price, 0),
+      };
+    }
+    const items = otherDisplayData;
     return {
       totalSKUs: items.length,
       totalInitial: items.reduce((sum, i) => sum + i.initial_stock, 0),
@@ -169,9 +219,9 @@ export default function InventoryPage() {
       totalSold: items.reduce((sum, i) => sum + i.total_sold, 0),
       totalLoss: items.reduce((sum, i) => sum + i.total_loss, 0),
       totalRemaining: items.reduce((sum, i) => sum + i.remaining_stock, 0),
-      totalValue: items.reduce((sum, i) => sum + i.remaining_stock * i.cash_price, 0),
+      totalValue: items.reduce((sum, i) => sum + i.remaining_stock * i.suggested_price, 0),
     };
-  }, [isTyre, tyreDisplayData, phoneDisplayData]);
+  }, [isTyre, isPhone, tyreDisplayData, phoneDisplayData, otherDisplayData]);
 
   function handleSort(key: string) {
     if (sortKey === key) {
@@ -198,9 +248,16 @@ export default function InventoryPage() {
           month: Number(month),
           [editCell.field]: numValue,
         });
-      } else {
+      } else if (isPhone) {
         await updatePhoneStock.mutateAsync({
           phone_id: editCell.productId,
+          year: Number(year),
+          month: Number(month),
+          [editCell.field]: numValue,
+        });
+      } else {
+        await updateOtherStock.mutateAsync({
+          other_product_id: editCell.productId,
           year: Number(year),
           month: Number(month),
           [editCell.field]: numValue,
@@ -337,6 +394,32 @@ export default function InventoryPage() {
     { key: 'remaining_stock', label: 'Remaining', sortable: true, className: 'text-center font-medium' },
   ];
 
+  const otherColumns: Column<OtherInventoryItem>[] = [
+    { key: 'name', label: 'Name', sortable: true },
+    { key: 'category', label: 'Category', sortable: true },
+    { key: 'suggested_price', label: 'Price', sortable: true, render: (item) => (
+      <button
+        className="hover:bg-blue-50 px-1 py-0.5 rounded cursor-pointer text-left"
+        onClick={() => setPriceEditModal({
+          productId: item.other_product_id,
+          productType: 'other',
+          productLabel: item.name,
+          currentPrices: { suggested_price: item.suggested_price },
+        })}
+        title="Click to edit price"
+      >
+        {formatMWK(item.suggested_price)}
+      </button>
+    ) },
+    { key: 'initial_stock', label: 'Initial', sortable: true, className: 'text-center', render: (item) => renderEditableCell(item.other_product_id, 'initial_stock', item.initial_stock) },
+    { key: 'added_stock', label: 'Added', sortable: true, className: 'text-center', render: (item) => renderEditableCell(item.other_product_id, 'added_stock', item.added_stock) },
+    { key: 'total_sold', label: 'Sold', sortable: true, className: 'text-center' },
+    { key: 'total_loss', label: 'Loss', sortable: true, className: 'text-center', render: (item) => item.total_loss > 0 ? <span className="text-red-600">{item.total_loss}</span> : 0 },
+    { key: 'remaining_stock', label: 'Remaining', sortable: true, className: 'text-center font-medium' },
+  ];
+
+  const productTypeLabel = isTyre ? 'Tyre' : isPhone ? 'Phone' : 'Product';
+
   return (
     <MainLayout title="Inventory">
       {/* Controls Row 1: Year/Month + Category (tyre only) */}
@@ -349,7 +432,7 @@ export default function InventoryPage() {
             <Upload size={14} /> Import Stock
           </Button>
           <Button variant="secondary" size="sm" onClick={() => setAddProductModalOpen(true)}>
-            <Plus size={14} /> Add {isTyre ? 'Tyre' : 'Phone'}
+            <Plus size={14} /> Add {productTypeLabel}
           </Button>
         </div>
 
@@ -383,7 +466,7 @@ export default function InventoryPage() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={isTyre ? 'Search size, brand...' : 'Search brand, model...'}
+            placeholder={isTyre ? 'Search size, brand...' : isPhone ? 'Search brand, model...' : 'Search name, category...'}
             className="pl-8 pr-7 py-1.5 w-52 text-sm border border-slate-300 rounded-md
               focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
@@ -407,7 +490,7 @@ export default function InventoryPage() {
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
             )}
           >
-            All Brands
+            {isOther ? 'All Categories' : 'All Brands'}
           </button>
           {brandOptions.map((brand) => (
             <button
@@ -467,7 +550,7 @@ export default function InventoryPage() {
             return '';
           }}
         />
-      ) : (
+      ) : isPhone ? (
         <Table
           columns={phoneColumns}
           data={phoneDisplayData}
@@ -483,10 +566,26 @@ export default function InventoryPage() {
             return '';
           }}
         />
+      ) : (
+        <Table
+          columns={otherColumns}
+          data={otherDisplayData}
+          keyExtractor={(item) => item.other_product_id}
+          loading={isLoading}
+          emptyMessage="No inventory data for this period."
+          sortKey={sortKey}
+          sortDirection={sortDir}
+          onSort={handleSort}
+          rowClassName={(item) => {
+            if (item.remaining_stock < 3) return 'bg-red-50';
+            if (item.remaining_stock < 5) return 'bg-yellow-50';
+            return '';
+          }}
+        />
       )}
 
       {/* Import History */}
-      <ImportHistoryPanel productType={isTyre ? 'tyre' : 'phone'} />
+      <ImportHistoryPanel productType={isTyre ? 'tyre' : isPhone ? 'phone' : 'other'} />
 
       {/* Modals */}
       <ImportStockModal
@@ -494,7 +593,7 @@ export default function InventoryPage() {
         onClose={() => setImportModalOpen(false)}
         year={Number(year)}
         month={Number(month)}
-        productType={isTyre ? 'tyre' : 'phone'}
+        productType={isTyre ? 'tyre' : isPhone ? 'phone' : 'other'}
       />
       <AddProductModal
         open={addProductModalOpen}

@@ -138,6 +138,10 @@ class RevenueBreakdown(BaseModel):
     phone_mukuru: float = 0.0
     phone_card: float = 0.0
     phone_total: float = 0.0
+    other_cash: float = 0.0
+    other_mukuru: float = 0.0
+    other_card: float = 0.0
+    other_total: float = 0.0
     grand_total: float = 0.0
 
 

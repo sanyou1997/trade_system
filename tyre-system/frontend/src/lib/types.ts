@@ -8,7 +8,7 @@ export type LossType = 'broken' | 'exchange' | 'refund';
 export type UserRole = 'admin' | 'operator';
 export type SyncDirection = 'import' | 'export';
 export type SyncStatus = 'success' | 'failed' | 'partial';
-export type ProductType = 'tyre' | 'phone';
+export type ProductType = 'tyre' | 'phone' | 'other';
 
 // --- Core Entities ---
 
@@ -327,6 +327,97 @@ export interface PhoneLossCreate {
   notes: string;
 }
 
+// --- Other Product Entities ---
+
+export interface OtherProduct {
+  id: number;
+  name: string;
+  cost: number;
+  suggested_price: number;
+  category: string | null;
+  note: string | null;
+  excel_row: number | null;
+  created_at: string;
+}
+
+export interface OtherProductWithStock extends OtherProduct {
+  remaining_stock: number;
+  initial_stock: number;
+  added_stock: number;
+  total_sold: number;
+}
+
+export interface OtherSale {
+  id: number;
+  sale_date: string;
+  other_product_id: number;
+  quantity: number;
+  unit_price: number;
+  discount: number;
+  total: number;
+  payment_method: PaymentMethod;
+  customer_name: string;
+  synced: boolean;
+  created_at: string;
+  product_name?: string;
+}
+
+export interface OtherSaleCreate {
+  sale_date: string;
+  other_product_id: number;
+  quantity: number;
+  unit_price: number;
+  discount: number;
+  payment_method: PaymentMethod;
+  customer_name: string;
+}
+
+export interface OtherSalesFilter {
+  start_date?: string;
+  end_date?: string;
+  payment_method?: PaymentMethod;
+  other_product_id?: number;
+  customer?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface OtherInventoryItem {
+  other_product_id: number;
+  name: string;
+  category: string | null;
+  note: string | null;
+  cost: number;
+  suggested_price: number;
+  year: number;
+  month: number;
+  initial_stock: number;
+  added_stock: number;
+  total_sold: number;
+  total_loss: number;
+  remaining_stock: number;
+}
+
+export interface OtherLoss {
+  id: number;
+  loss_date: string;
+  other_product_id: number;
+  quantity: number;
+  loss_type: LossType;
+  refund_amount: number;
+  notes: string | null;
+  product_name?: string;
+}
+
+export interface OtherLossCreate {
+  loss_date: string;
+  other_product_id: number;
+  quantity: number;
+  loss_type: LossType;
+  refund_amount: number;
+  notes: string;
+}
+
 // --- Stock Import Types ---
 
 export interface ImportPreviewItem {
@@ -465,6 +556,10 @@ export interface RevenueBreakdown {
   phone_mukuru: number;
   phone_card: number;
   phone_total: number;
+  other_cash: number;
+  other_mukuru: number;
+  other_card: number;
+  other_total: number;
   grand_total: number;
 }
 

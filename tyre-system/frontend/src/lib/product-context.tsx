@@ -2,13 +2,14 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
-export type ProductType = 'tyre' | 'phone';
+export type ProductType = 'tyre' | 'phone' | 'other';
 
 interface ProductTypeContextValue {
   productType: ProductType;
   setProductType: (type: ProductType) => void;
   isTyre: boolean;
   isPhone: boolean;
+  isOther: boolean;
 }
 
 const ProductTypeContext = createContext<ProductTypeContextValue | null>(null);
@@ -20,7 +21,7 @@ export function ProductTypeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved === 'phone' || saved === 'tyre') {
+    if (saved === 'phone' || saved === 'tyre' || saved === 'other') {
       setProductTypeState(saved);
     }
   }, []);
@@ -37,6 +38,7 @@ export function ProductTypeProvider({ children }: { children: ReactNode }) {
         setProductType,
         isTyre: productType === 'tyre',
         isPhone: productType === 'phone',
+        isOther: productType === 'other',
       }}
     >
       {children}

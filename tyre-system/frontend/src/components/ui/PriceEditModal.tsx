@@ -11,7 +11,7 @@ import { formatMWK } from '@/lib/utils';
 interface PriceEditModalProps {
   open: boolean;
   onClose: () => void;
-  productType: 'tyre' | 'phone';
+  productType: 'tyre' | 'phone' | 'other';
   productId: number;
   productLabel: string;
   currentPrices: {
@@ -58,7 +58,7 @@ export default function PriceEditModal({
       return;
     }
 
-    if (productType === 'tyre') {
+    if (productType === 'tyre' || productType === 'other') {
       const price = Number(suggestedPrice);
       if (isNaN(price) || price < 0) {
         toast('error', 'Please enter a valid price.');
@@ -66,7 +66,7 @@ export default function PriceEditModal({
       }
       try {
         await updatePrice.mutateAsync({
-          product_type: 'tyre',
+          product_type: productType,
           product_id: productId,
           password,
           suggested_price: price,
@@ -104,7 +104,7 @@ export default function PriceEditModal({
   return (
     <Modal open={open} onClose={onClose} title={`Edit Price - ${productLabel}`}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        {productType === 'tyre' ? (
+        {(productType === 'tyre' || productType === 'other') ? (
           <div>
             <div className="text-xs text-slate-500 mb-1">
               Current: {formatMWK(currentPrices.suggested_price ?? 0)}

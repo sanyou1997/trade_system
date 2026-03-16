@@ -11,8 +11,10 @@ import Table, { Column } from '@/components/ui/Table';
 import { useToast } from '@/components/ui/Toast';
 import { useCreateSale, useDailySales } from '@/hooks/useSales';
 import { useCreatePhoneSale, usePhoneDailySales } from '@/hooks/usePhoneSales';
+import { useCreateOtherSale, useOtherDailySales } from '@/hooks/useOtherSales';
 import { useTyresWithStock } from '@/hooks/useTyres';
 import { usePhonesWithStock } from '@/hooks/usePhones';
+import { useOthersWithStock } from '@/hooks/useOthers';
 import { useProductType } from '@/lib/product-context';
 import {
   formatDateISO,
@@ -20,6 +22,7 @@ import {
   formatNumber,
   formatTyreLabel,
   formatPhoneLabel,
+  formatOtherLabel,
   roundTo1000,
   cn,
 } from '@/lib/utils';
@@ -27,6 +30,8 @@ import { useSettings } from '@/hooks/useSettings';
 import {
   Sale,
   PhoneSale,
+  OtherSale,
+  OtherProductWithStock,
   PaymentMethod,
   TyreWithStock,
   PhoneWithStock,
@@ -93,7 +98,7 @@ function tyreMatchesFilter(tyre: TyreWithStock, filter: ReturnType<typeof parseS
 
 export default function RecordSalePage() {
   const { toast } = useToast();
-  const { isTyre } = useProductType();
+  const { isTyre, isPhone, isOther } = useProductType();
   const { data: settingsData } = useSettings();
   const cashRate = settingsData?.cash_rate ? Number(settingsData.cash_rate) : 0;
   const mukuruRate = settingsData?.mukuru_rate ? Number(settingsData.mukuru_rate) : 0;
@@ -134,7 +139,12 @@ export default function RecordSalePage() {
   const { data: phoneTodaySales } = usePhoneDailySales(saleDate);
   const createPhoneSale = useCreatePhoneSale();
 
-  const todaySales = isTyre ? tyreTodaySales : phoneTodaySales;
+  // Other hooks
+  const { data: otherProducts } = useOthersWithStock();
+  const { data: otherTodaySales } = useOtherDailySales(saleDate);
+  const createOtherSale = useCreateOtherSale();
+
+  const todaySales = isTyre ? tyreTodaySales : isPhone ? phoneTodaySales : otherTodaySales;
 
   // Extract unique brands
   const brandOptions = useMemo(() => {
@@ -144,11 +154,12 @@ export default function RecordSalePage() {
       for (const t of tyres) if (t.brand) brands.add(t.brand);
       return Array.from(brands).sort();
     }
+    if (isOther) return [];
     if (!phones) return [];
     const brands = new Set<string>();
     for (const p of phones) if (p.brand) brands.add(p.brand);
     return Array.from(brands).sort();
-  }, [isTyre, tyres, phones]);
+  }, [isTyre, isOther, tyres, phones]);
 
   // Filter products
   const filteredTyres = useMemo(() => {
@@ -174,6 +185,17 @@ export default function RecordSalePage() {
       });
   }, [phones, searchQuery, brandFilter]);
 
+  const filteredOthers = useMemo(() => {
+    if (!otherProducts) return [];
+    const q = searchQuery.trim().toLowerCase();
+    return otherProducts
+      .filter((o) => o.remaining_stock > 0)
+      .filter((o) => {
+        if (!q) return true;
+        return o.name.toLowerCase().includes(q);
+      });
+  }, [otherProducts, searchQuery]);
+
   const selectedTyre = useMemo(() => {
     if (!productId || !tyres) return null;
     return tyres.find((t) => t.id === Number(productId)) ?? null;
@@ -183,6 +205,11 @@ export default function RecordSalePage() {
     if (!productId || !phones) return null;
     return phones.find((p) => p.id === Number(productId)) ?? null;
   }, [productId, phones]);
+
+  const selectedOther = useMemo(() => {
+    if (!productId || !otherProducts) return null;
+    return otherProducts.find((o) => o.id === Number(productId)) ?? null;
+  }, [productId, otherProducts]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -209,6 +236,13 @@ export default function RecordSalePage() {
     setDropdownOpen(false);
   };
 
+  const handleOtherSelect = (other: OtherProductWithStock) => {
+    setProductId(String(other.id));
+    setSearchQuery(other.name);
+    setUnitPrice(String(other.suggested_price));
+    setDropdownOpen(false);
+  };
+
   const clearSelection = () => {
     setProductId('');
     setSearchQuery('');
@@ -225,19 +259,19 @@ export default function RecordSalePage() {
 
   const todayTotalQty = useMemo(() => {
     if (!todaySales) return 0;
-    return todaySales.reduce((sum: number, s: Sale | PhoneSale) => sum + s.quantity, 0);
+    return todaySales.reduce((sum: number, s: Sale | PhoneSale | OtherSale) => sum + s.quantity, 0);
   }, [todaySales]);
 
   const todayTotalRevenue = useMemo(() => {
     if (!todaySales) return 0;
-    return todaySales.reduce((sum: number, s: Sale | PhoneSale) => sum + s.total, 0);
+    return todaySales.reduce((sum: number, s: Sale | PhoneSale | OtherSale) => sum + s.total, 0);
   }, [todaySales]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
 
     if (!productId) {
-      toast('error', `Please select a ${isTyre ? 'tyre' : 'phone'}.`);
+      toast('error', `Please select a ${isTyre ? 'tyre' : isPhone ? 'phone' : 'product'}.`);
       return;
     }
 
@@ -262,6 +296,29 @@ export default function RecordSalePage() {
         await createTyreSale.mutateAsync({
           sale_date: saleDate,
           tyre_id: Number(productId),
+          quantity: qty,
+          unit_price: price,
+          discount: Number(discount) || 0,
+          payment_method: paymentMethod as PaymentMethod,
+          customer_name: customerName.trim(),
+        });
+        toast('success', 'Sale recorded successfully!');
+        clearSelection();
+        setQuantity('1');
+        setDiscount('0');
+        setCustomerName('');
+      } catch (err) {
+        toast('error', err instanceof Error ? err.message : 'Failed to record sale.');
+      }
+    } else if (isOther) {
+      if (selectedOther && qty > selectedOther.remaining_stock) {
+        toast('error', `Only ${selectedOther.remaining_stock} in stock.`);
+        return;
+      }
+      try {
+        await createOtherSale.mutateAsync({
+          sale_date: saleDate,
+          other_product_id: Number(productId),
           quantity: qty,
           unit_price: price,
           discount: Number(discount) || 0,
@@ -322,8 +379,15 @@ export default function RecordSalePage() {
     { key: 'payment_method', label: 'Payment', render: (s) => paymentBadge(s.payment_method) },
   ];
 
-  const remainingStock = isTyre ? selectedTyre?.remaining_stock : selectedPhone?.remaining_stock;
-  const defaultPrice = isTyre ? selectedTyre?.suggested_price : selectedPhone?.cash_price;
+  const otherTodayColumns: Column<OtherSale>[] = [
+    { key: 'product', label: 'Product', render: (s) => formatOtherLabel(s.product_name, s.other_product_id) },
+    { key: 'quantity', label: 'Qty', className: 'text-center' },
+    { key: 'total', label: 'Total', render: (s) => formatMWK(s.total) },
+    { key: 'payment_method', label: 'Payment', render: (s) => paymentBadge(s.payment_method) },
+  ];
+
+  const remainingStock = isTyre ? selectedTyre?.remaining_stock : isOther ? selectedOther?.remaining_stock : selectedPhone?.remaining_stock;
+  const defaultPrice = isTyre ? selectedTyre?.suggested_price : isOther ? selectedOther?.suggested_price : selectedPhone?.cash_price;
 
   return (
     <MainLayout title="Record Sale">
@@ -338,10 +402,11 @@ export default function RecordSalePage() {
                 {/* Searchable Product Selector */}
                 <div ref={dropdownRef} className="relative sm:col-span-2">
                   <label className="block text-sm font-medium text-slate-700 mb-1">
-                    {isTyre ? 'Tyre' : 'Phone'}
+                    {isTyre ? 'Tyre' : isPhone ? 'Phone' : 'Product'}
                   </label>
 
                   {/* Filter pills */}
+                  {!isOther && (
                   <div className="flex flex-wrap gap-1.5 mb-2">
                     {isTyre && CATEGORY_FILTERS.map((cat) => (
                       <button
@@ -387,6 +452,7 @@ export default function RecordSalePage() {
                       </button>
                     ))}
                   </div>
+                  )}
 
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -402,7 +468,7 @@ export default function RecordSalePage() {
                         setDropdownOpen(true);
                       }}
                       onFocus={() => setDropdownOpen(true)}
-                      placeholder={isTyre ? 'Search by size (e.g. 175/70/R13)...' : 'Search by brand, model...'}
+                      placeholder={isTyre ? 'Search by size (e.g. 175/70/R13)...' : isPhone ? 'Search by brand, model...' : 'Search by product name...'}
                       className="w-full pl-9 pr-16 py-2 border border-slate-300 rounded-md text-sm
                         focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
@@ -419,7 +485,7 @@ export default function RecordSalePage() {
                   </div>
 
                   {/* Selected product info */}
-                  {(selectedTyre || selectedPhone) && (
+                  {(selectedTyre || selectedPhone || selectedOther) && (
                     <div className="mt-1 text-xs text-slate-500">
                       Stock: <span className={remainingStock != null && remainingStock < 5 ? 'text-red-600 font-medium' : 'text-green-600 font-medium'}>
                         {remainingStock}
@@ -432,8 +498,11 @@ export default function RecordSalePage() {
                           {selectedTyre.pattern && ` ${selectedTyre.pattern}`}
                         </>
                       )}
-                      {!isTyre && selectedPhone && selectedPhone.config && (
+                      {isPhone && selectedPhone && selectedPhone.config && (
                         <>{' | '}{selectedPhone.config}</>
+                      )}
+                      {isOther && selectedOther && selectedOther.category && (
+                        <>{' | '}{selectedOther.category}</>
                       )}
                     </div>
                   )}
@@ -471,6 +540,39 @@ export default function RecordSalePage() {
                                     {t.remaining_stock} left
                                   </span>
                                   <span className="text-xs text-slate-400">{formatMWK(t.suggested_price)}</span>
+                                </div>
+                              </div>
+                            </button>
+                          ))
+                        )
+                      ) : isOther ? (
+                        filteredOthers.length === 0 ? (
+                          <div className="px-3 py-2 text-sm text-slate-500">
+                            {searchQuery ? 'No matching products with stock' : 'No products in stock'}
+                          </div>
+                        ) : (
+                          filteredOthers.map((o) => (
+                            <button
+                              key={o.id}
+                              type="button"
+                              onClick={() => handleOtherSelect(o)}
+                              className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 border-b border-slate-50 last:border-0
+                                ${String(o.id) === productId ? 'bg-blue-50 text-blue-700' : 'text-slate-700'}`}
+                            >
+                              <div className="flex justify-between items-center">
+                                <div>
+                                  <span className="font-medium">{o.name}</span>
+                                  {o.category && <span className="text-slate-400 ml-2">({o.category})</span>}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className={`text-xs px-1.5 py-0.5 rounded ${
+                                    o.remaining_stock < 3 ? 'bg-red-100 text-red-700'
+                                    : o.remaining_stock < 5 ? 'bg-yellow-100 text-yellow-700'
+                                    : 'bg-green-100 text-green-700'
+                                  }`}>
+                                    {o.remaining_stock} left
+                                  </span>
+                                  <span className="text-xs text-slate-400">{formatMWK(o.suggested_price)}</span>
                                 </div>
                               </div>
                             </button>
@@ -546,7 +648,7 @@ export default function RecordSalePage() {
 
               <Button
                 type="submit"
-                loading={isTyre ? createTyreSale.isPending : createPhoneSale.isPending}
+                loading={isTyre ? createTyreSale.isPending : isOther ? createOtherSale.isPending : createPhoneSale.isPending}
                 className="w-full"
               >
                 Record Sale
@@ -569,6 +671,13 @@ export default function RecordSalePage() {
               <Table
                 columns={tyreTodayColumns}
                 data={(tyreTodaySales ?? []) as Sale[]}
+                keyExtractor={(s) => s.id}
+                emptyMessage="No sales recorded today."
+              />
+            ) : isOther ? (
+              <Table
+                columns={otherTodayColumns}
+                data={(otherTodaySales ?? []) as OtherSale[]}
                 keyExtractor={(s) => s.id}
                 emptyMessage="No sales recorded today."
               />

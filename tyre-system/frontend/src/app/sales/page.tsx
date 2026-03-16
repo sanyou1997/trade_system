@@ -13,12 +13,14 @@ import Pagination from '@/components/ui/Pagination';
 import { useToast } from '@/components/ui/Toast';
 import { useSales, useDeleteSale } from '@/hooks/useSales';
 import { usePhoneSales, useDeletePhoneSale } from '@/hooks/usePhoneSales';
+import { useOtherSales, useDeleteOtherSale } from '@/hooks/useOtherSales';
 import { useTyres } from '@/hooks/useTyres';
 import { usePhones } from '@/hooks/usePhones';
+import { useOthers } from '@/hooks/useOthers';
 import { useAuth } from '@/hooks/useAuth';
 import { useProductType } from '@/lib/product-context';
-import { formatMWK, formatDate, formatTyreLabel, formatPhoneLabel } from '@/lib/utils';
-import { Sale, PhoneSale, PaymentMethod } from '@/lib/types';
+import { formatMWK, formatDate, formatTyreLabel, formatPhoneLabel, formatOtherLabel } from '@/lib/utils';
+import { Sale, PhoneSale, OtherSale, OtherSalesFilter, PaymentMethod } from '@/lib/types';
 import { Trash2 } from 'lucide-react';
 
 const PAYMENT_FILTER_OPTIONS = [
@@ -33,7 +35,7 @@ const PAGE_SIZE = 20;
 export default function SalesHistoryPage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { isTyre } = useProductType();
+  const { isTyre, isPhone, isOther } = useProductType();
 
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -41,7 +43,7 @@ export default function SalesHistoryPage() {
   const [productFilter, setProductFilter] = useState('');
   const [customerSearch, setCustomerSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [deleteTarget, setDeleteTarget] = useState<(Sale | PhoneSale) | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<(Sale | PhoneSale | OtherSale) | null>(null);
 
   // Tyre hooks
   const { data: tyres } = useTyres();
@@ -50,6 +52,10 @@ export default function SalesHistoryPage() {
   // Phone hooks
   const { data: phones } = usePhones();
   const deletePhoneSale = useDeletePhoneSale();
+
+  // Other hooks
+  const { data: otherProducts } = useOthers();
+  const deleteOtherSale = useDeleteOtherSale();
 
   const tyreFilters = useMemo(
     () => ({
@@ -77,22 +83,33 @@ export default function SalesHistoryPage() {
     [startDate, endDate, paymentMethod, productFilter, customerSearch, page, isTyre],
   );
 
+  const otherFilters: OtherSalesFilter = useMemo(
+    () => ({
+      start_date: startDate || undefined,
+      end_date: endDate || undefined,
+      payment_method: (paymentMethod as PaymentMethod) || undefined,
+      other_product_id: isOther && productFilter ? Number(productFilter) : undefined,
+      customer: customerSearch || undefined,
+      page,
+      limit: PAGE_SIZE,
+    }),
+    [startDate, endDate, paymentMethod, productFilter, customerSearch, page, isOther],
+  );
+
   const { data: tyreSalesResponse, isLoading: tyreLoading } = useSales(tyreFilters);
   const { data: phoneSalesResponse, isLoading: phoneLoading } = usePhoneSales(phoneFilters);
+  const { data: otherSalesResponse, isLoading: otherLoading } = useOtherSales(otherFilters);
 
-  const isLoading = isTyre ? tyreLoading : phoneLoading;
+  const isLoading = isTyre ? tyreLoading : isPhone ? phoneLoading : otherLoading;
   const tyreSales = tyreSalesResponse?.data ?? [];
   const phoneSales = phoneSalesResponse?.data ?? [];
-  const totalPages = isTyre
-    ? (tyreSalesResponse?.meta?.total ? Math.ceil(tyreSalesResponse.meta.total / PAGE_SIZE) : 1)
-    : (phoneSalesResponse?.meta?.total ? Math.ceil(phoneSalesResponse.meta.total / PAGE_SIZE) : 1);
+  const otherSales = otherSalesResponse?.data ?? [];
+  const activeSales = isTyre ? tyreSales : isPhone ? phoneSales : otherSales;
+  const activeResponse = isTyre ? tyreSalesResponse : isPhone ? phoneSalesResponse : otherSalesResponse;
+  const totalPages = activeResponse?.meta?.total ? Math.ceil(activeResponse.meta.total / PAGE_SIZE) : 1;
 
-  const totalQty = isTyre
-    ? tyreSales.reduce((sum, s) => sum + s.quantity, 0)
-    : phoneSales.reduce((sum, s) => sum + s.quantity, 0);
-  const totalRevenue = isTyre
-    ? tyreSales.reduce((sum, s) => sum + s.total, 0)
-    : phoneSales.reduce((sum, s) => sum + s.total, 0);
+  const totalQty = activeSales.reduce((sum, s) => sum + s.quantity, 0);
+  const totalRevenue = activeSales.reduce((sum, s) => sum + s.total, 0);
 
   const productOptions = useMemo(() => {
     if (isTyre) {
@@ -104,6 +121,15 @@ export default function SalesHistoryPage() {
       }
       return opts;
     }
+    if (isOther) {
+      const opts = [{ value: '', label: 'All Products' }];
+      if (otherProducts) {
+        otherProducts.forEach((p) =>
+          opts.push({ value: String(p.id), label: p.name }),
+        );
+      }
+      return opts;
+    }
     const opts = [{ value: '', label: 'All Phones' }];
     if (phones) {
       phones.forEach((p) =>
@@ -111,15 +137,17 @@ export default function SalesHistoryPage() {
       );
     }
     return opts;
-  }, [isTyre, tyres, phones]);
+  }, [isTyre, isOther, tyres, phones, otherProducts]);
 
   async function handleDelete() {
     if (!deleteTarget) return;
     try {
       if (isTyre) {
         await deleteTyreSale.mutateAsync(deleteTarget.id);
-      } else {
+      } else if (isPhone) {
         await deletePhoneSale.mutateAsync(deleteTarget.id);
+      } else {
+        await deleteOtherSale.mutateAsync(deleteTarget.id);
       }
       toast('success', 'Sale deleted.');
       setDeleteTarget(null);
@@ -192,6 +220,33 @@ export default function SalesHistoryPage() {
       : []),
   ];
 
+  const otherColumns: Column<OtherSale>[] = [
+    { key: 'sale_date', label: 'Date', sortable: true, render: (s) => formatDate(s.sale_date) },
+    {
+      key: 'product',
+      label: 'Product',
+      render: (s) => formatOtherLabel(s.product_name, s.other_product_id),
+    },
+    { key: 'quantity', label: 'Qty', className: 'text-center' },
+    { key: 'unit_price', label: 'Unit Price', render: (s) => formatMWK(s.unit_price) },
+    { key: 'discount', label: 'Discount', render: (s) => (s.discount > 0 ? `${s.discount}%` : '-') },
+    { key: 'total', label: 'Total', render: (s) => formatMWK(s.total) },
+    { key: 'payment_method', label: 'Payment', render: (s) => paymentBadge(s.payment_method) },
+    { key: 'customer_name', label: 'Customer' },
+    ...(user?.role === 'admin'
+      ? [{
+          key: 'actions' as const,
+          label: '',
+          className: 'w-10',
+          render: (s: OtherSale) => (
+            <button onClick={() => setDeleteTarget(s)} className="p-1 text-slate-400 hover:text-red-600 transition-colors" title="Delete sale">
+              <Trash2 size={16} />
+            </button>
+          ),
+        }]
+      : []),
+  ];
+
   const deleteLabel = deleteTarget
     ? isTyre
       ? formatTyreLabel(
@@ -200,12 +255,17 @@ export default function SalesHistoryPage() {
           (deleteTarget as Sale).tyre_brand,
           (deleteTarget as Sale).tyre_id,
         )
-      : formatPhoneLabel(
-          (deleteTarget as PhoneSale).phone_brand,
-          (deleteTarget as PhoneSale).phone_model,
-          (deleteTarget as PhoneSale).phone_config,
-          (deleteTarget as PhoneSale).phone_id,
-        )
+      : isPhone
+        ? formatPhoneLabel(
+            (deleteTarget as PhoneSale).phone_brand,
+            (deleteTarget as PhoneSale).phone_model,
+            (deleteTarget as PhoneSale).phone_config,
+            (deleteTarget as PhoneSale).phone_id,
+          )
+        : formatOtherLabel(
+            (deleteTarget as OtherSale).product_name,
+            (deleteTarget as OtherSale).other_product_id,
+          )
     : '';
 
   return (
@@ -217,7 +277,7 @@ export default function SalesHistoryPage() {
           <Input label="End Date" type="date" value={endDate} onChange={(e) => { setEndDate(e.target.value); setPage(1); }} />
           <Select label="Payment Method" options={PAYMENT_FILTER_OPTIONS} value={paymentMethod} onChange={(e) => { setPaymentMethod(e.target.value); setPage(1); }} />
           <Select
-            label={isTyre ? 'Tyre' : 'Phone'}
+            label={isTyre ? 'Tyre' : isPhone ? 'Phone' : 'Product'}
             options={productOptions}
             value={productFilter}
             onChange={(e) => { setProductFilter(e.target.value); setPage(1); }}
@@ -241,10 +301,18 @@ export default function SalesHistoryPage() {
           loading={isLoading}
           emptyMessage="No sales found matching your filters."
         />
-      ) : (
+      ) : isPhone ? (
         <Table
           columns={phoneColumns}
           data={phoneSales}
+          keyExtractor={(s) => s.id}
+          loading={isLoading}
+          emptyMessage="No sales found matching your filters."
+        />
+      ) : (
+        <Table
+          columns={otherColumns}
+          data={otherSales}
           keyExtractor={(s) => s.id}
           loading={isLoading}
           emptyMessage="No sales found matching your filters."
@@ -260,7 +328,7 @@ export default function SalesHistoryPage() {
         </p>
         {deleteTarget && (
           <div className="text-sm bg-slate-50 p-3 rounded mb-4">
-            <p><strong>{isTyre ? 'Tyre' : 'Phone'}:</strong> {deleteLabel}</p>
+            <p><strong>{isTyre ? 'Tyre' : isPhone ? 'Phone' : 'Product'}:</strong> {deleteLabel}</p>
             <p><strong>Qty:</strong> {deleteTarget.quantity} | <strong>Total:</strong> {formatMWK(deleteTarget.total)}</p>
           </div>
         )}
@@ -268,7 +336,7 @@ export default function SalesHistoryPage() {
           <Button variant="secondary" onClick={() => setDeleteTarget(null)}>Cancel</Button>
           <Button
             variant="danger"
-            loading={isTyre ? deleteTyreSale.isPending : deletePhoneSale.isPending}
+            loading={isTyre ? deleteTyreSale.isPending : isPhone ? deletePhoneSale.isPending : deleteOtherSale.isPending}
             onClick={handleDelete}
           >
             Delete

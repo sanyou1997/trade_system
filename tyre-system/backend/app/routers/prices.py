@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.models.other_product import OtherProduct
 from app.models.phone import Phone
 from app.models.tyre import Tyre
 from app.schemas.common import ApiResponse
@@ -76,4 +77,24 @@ async def update_price(
             "online_price": phone.online_price,
         })
 
-    return ApiResponse.fail("Invalid product_type. Must be 'tyre' or 'phone'.")
+    if body.product_type == "other":
+        result = await db.execute(
+            select(OtherProduct).where(OtherProduct.id == body.product_id)
+        )
+        product = result.scalar_one_or_none()
+        if product is None:
+            return ApiResponse.fail("Other product not found")
+
+        if body.suggested_price is not None:
+            product.suggested_price = body.suggested_price
+
+        await db.commit()
+        await db.refresh(product)
+
+        return ApiResponse.ok({
+            "id": product.id,
+            "name": product.name,
+            "suggested_price": product.suggested_price,
+        })
+
+    return ApiResponse.fail("Invalid product_type. Must be 'tyre', 'phone', or 'other'.")

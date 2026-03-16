@@ -11,11 +11,13 @@ import Table, { Column } from '@/components/ui/Table';
 import { useToast } from '@/components/ui/Toast';
 import { useLosses, useCreateLoss, useDeleteLoss } from '@/hooks/useLosses';
 import { usePhoneLosses, useCreatePhoneLoss, useDeletePhoneLoss } from '@/hooks/usePhoneLosses';
+import { useOtherLosses, useCreateOtherLoss, useDeleteOtherLoss } from '@/hooks/useOtherLosses';
 import { useTyresWithStock } from '@/hooks/useTyres';
 import { usePhonesWithStock } from '@/hooks/usePhones';
+import { useOthersWithStock } from '@/hooks/useOthers';
 import { useProductType } from '@/lib/product-context';
-import { formatMWK, formatDate, formatDateISO, formatPhoneLabel } from '@/lib/utils';
-import { Loss, PhoneLoss, LossType } from '@/lib/types';
+import { formatMWK, formatDate, formatDateISO, formatPhoneLabel, formatOtherLabel } from '@/lib/utils';
+import { Loss, PhoneLoss, OtherLoss, LossType } from '@/lib/types';
 import { Trash2 } from 'lucide-react';
 
 const LOSS_TYPE_OPTIONS = [
@@ -37,7 +39,7 @@ const YEAR_OPTIONS = Array.from({ length: 5 }, (_, i) => ({
 
 export default function LossesPage() {
   const { toast } = useToast();
-  const { isTyre } = useProductType();
+  const { isTyre, isPhone } = useProductType();
   const now = new Date();
   const today = formatDateISO(now);
 
@@ -64,7 +66,13 @@ export default function LossesPage() {
   const createPhoneLoss = useCreatePhoneLoss();
   const deletePhoneLoss = useDeletePhoneLoss();
 
-  const isLoading = isTyre ? tyreLoading : phoneLoading;
+  // Other hooks
+  const { data: others } = useOthersWithStock();
+  const { data: otherLosses, isLoading: otherLoading } = useOtherLosses(Number(year), Number(month));
+  const createOtherLoss = useCreateOtherLoss();
+  const deleteOtherLoss = useDeleteOtherLoss();
+
+  const isLoading = isTyre ? tyreLoading : isPhone ? phoneLoading : otherLoading;
 
   const productOptions = useMemo(() => {
     if (isTyre) {
@@ -74,18 +82,25 @@ export default function LossesPage() {
         label: `${t.size} - ${t.brand || 'No Brand'} (Stock: ${t.remaining_stock})`,
       }));
     }
-    if (!phones) return [];
-    return phones.map((p) => ({
-      value: String(p.id),
-      label: `${p.brand} ${p.model} ${p.config ? `(${p.config})` : ''} (Stock: ${p.remaining_stock})`,
+    if (isPhone) {
+      if (!phones) return [];
+      return phones.map((p) => ({
+        value: String(p.id),
+        label: `${p.brand} ${p.model} ${p.config ? `(${p.config})` : ''} (Stock: ${p.remaining_stock})`,
+      }));
+    }
+    if (!others) return [];
+    return others.map((o) => ({
+      value: String(o.id),
+      label: `${o.name} (Stock: ${o.remaining_stock})`,
     }));
-  }, [isTyre, tyres, phones]);
+  }, [isTyre, isPhone, tyres, phones, others]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
 
     if (!productId) {
-      toast('error', `Please select a ${isTyre ? 'tyre' : 'phone'}.`);
+      toast('error', `Please select a ${isTyre ? 'tyre' : isPhone ? 'phone' : 'product'}.`);
       return;
     }
 
@@ -105,10 +120,19 @@ export default function LossesPage() {
           refund_amount: Number(refundAmount) || 0,
           notes: notes.trim(),
         });
-      } else {
+      } else if (isPhone) {
         await createPhoneLoss.mutateAsync({
           loss_date: lossDate,
           phone_id: Number(productId),
+          quantity: qty,
+          loss_type: lossType as LossType,
+          refund_amount: Number(refundAmount) || 0,
+          notes: notes.trim(),
+        });
+      } else {
+        await createOtherLoss.mutateAsync({
+          loss_date: lossDate,
+          other_product_id: Number(productId),
           quantity: qty,
           loss_type: lossType as LossType,
           refund_amount: Number(refundAmount) || 0,
@@ -139,6 +163,16 @@ export default function LossesPage() {
     if (!confirm(`Delete loss record #${loss.id}?`)) return;
     try {
       await deletePhoneLoss.mutateAsync(loss.id);
+      toast('success', 'Loss deleted.');
+    } catch (err) {
+      toast('error', err instanceof Error ? err.message : 'Failed to delete.');
+    }
+  }
+
+  async function handleDeleteOther(loss: OtherLoss) {
+    if (!confirm(`Delete loss record #${loss.id}?`)) return;
+    try {
+      await deleteOtherLoss.mutateAsync(loss.id);
       toast('success', 'Loss deleted.');
     } catch (err) {
       toast('error', err instanceof Error ? err.message : 'Failed to delete.');
@@ -243,6 +277,49 @@ export default function LossesPage() {
     },
   ];
 
+  const otherColumns: Column<OtherLoss>[] = [
+    {
+      key: 'loss_date',
+      label: 'Date',
+      render: (l) => formatDate(l.loss_date),
+    },
+    {
+      key: 'product',
+      label: 'Product',
+      render: (l) => formatOtherLabel(l.product_name, l.other_product_id),
+    },
+    { key: 'quantity', label: 'Qty', className: 'text-center' },
+    {
+      key: 'loss_type',
+      label: 'Type',
+      render: (l) => (
+        <Badge variant={lossTypeVariant(l.loss_type)}>
+          {l.loss_type.charAt(0).toUpperCase() + l.loss_type.slice(1)}
+        </Badge>
+      ),
+    },
+    {
+      key: 'refund_amount',
+      label: 'Refund',
+      render: (l) => (l.refund_amount > 0 ? formatMWK(l.refund_amount) : '-'),
+    },
+    { key: 'notes', label: 'Notes' },
+    {
+      key: 'actions',
+      label: '',
+      className: 'w-10',
+      render: (l) => (
+        <button
+          onClick={() => handleDeleteOther(l)}
+          className="p-1 text-slate-400 hover:text-red-500 transition-colors"
+          title="Delete"
+        >
+          <Trash2 size={16} />
+        </button>
+      ),
+    },
+  ];
+
   return (
     <MainLayout title="Losses">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -256,11 +333,11 @@ export default function LossesPage() {
               onChange={(e) => setLossDate(e.target.value)}
             />
             <Select
-              label={isTyre ? 'Tyre' : 'Phone'}
+              label={isTyre ? 'Tyre' : isPhone ? 'Phone' : 'Product'}
               options={productOptions}
               value={productId}
               onChange={(e) => setProductId(e.target.value)}
-              placeholder={`-- Select ${isTyre ? 'Tyre' : 'Phone'} --`}
+              placeholder={`-- Select ${isTyre ? 'Tyre' : isPhone ? 'Phone' : 'Product'} --`}
             />
             <Input
               label="Quantity"
@@ -291,7 +368,7 @@ export default function LossesPage() {
             />
             <Button
               type="submit"
-              loading={isTyre ? createTyreLoss.isPending : createPhoneLoss.isPending}
+              loading={isTyre ? createTyreLoss.isPending : isPhone ? createPhoneLoss.isPending : createOtherLoss.isPending}
               className="w-full"
             >
               Record Loss
@@ -326,10 +403,18 @@ export default function LossesPage() {
               loading={isLoading}
               emptyMessage="No losses recorded for this period."
             />
-          ) : (
+          ) : isPhone ? (
             <Table
               columns={phoneColumns}
               data={phoneLosses ?? []}
+              keyExtractor={(l) => l.id}
+              loading={isLoading}
+              emptyMessage="No losses recorded for this period."
+            />
+          ) : (
+            <Table
+              columns={otherColumns}
+              data={otherLosses ?? []}
               keyExtractor={(l) => l.id}
               loading={isLoading}
               emptyMessage="No losses recorded for this period."

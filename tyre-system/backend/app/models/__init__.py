@@ -15,6 +15,10 @@ from app.models.stock_import_log import StockImportLog
 from app.models.audit_account import AuditAccount
 from app.models.audit_transaction import AuditTransaction
 from app.models.audit_balance_override import AuditBalanceOverride
+from app.models.other_product import OtherProduct
+from app.models.other_sale import OtherSale
+from app.models.other_inventory import OtherInventoryPeriod
+from app.models.other_loss import OtherLoss
 
 __all__ = [
     "Tyre",
@@ -34,4 +38,8 @@ __all__ = [
     "AuditAccount",
     "AuditTransaction",
     "AuditBalanceOverride",
+    "OtherProduct",
+    "OtherSale",
+    "OtherInventoryPeriod",
+    "OtherLoss",
 ]

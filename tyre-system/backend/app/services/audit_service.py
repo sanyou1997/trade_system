@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.audit_account import AuditAccount
 from app.models.audit_balance_override import AuditBalanceOverride
 from app.models.audit_transaction import AuditTransaction, TransactionType
+from app.models.other_sale import OtherSale
 from app.models.phone_sale import PhoneSale
 from app.models.sale import PaymentMethod, Sale
 from app.schemas.audit import (
@@ -278,13 +279,32 @@ async def get_revenue_breakdown(
         )
         setattr(breakdown, field, float(result.scalar()))
 
+    for method, field in [
+        (PaymentMethod.CASH, "other_cash"),
+        (PaymentMethod.MUKURU, "other_mukuru"),
+        (PaymentMethod.CARD, "other_card"),
+    ]:
+        result = await db.execute(
+            select(func.coalesce(func.sum(OtherSale.total), 0)).where(
+                func.extract("year", OtherSale.sale_date) == year,
+                func.extract("month", OtherSale.sale_date) == month,
+                OtherSale.payment_method == method,
+            )
+        )
+        setattr(breakdown, field, float(result.scalar()))
+
     breakdown.tyre_total = (
         breakdown.tyre_cash + breakdown.tyre_mukuru + breakdown.tyre_card
     )
     breakdown.phone_total = (
         breakdown.phone_cash + breakdown.phone_mukuru + breakdown.phone_card
     )
-    breakdown.grand_total = breakdown.tyre_total + breakdown.phone_total
+    breakdown.other_total = (
+        breakdown.other_cash + breakdown.other_mukuru + breakdown.other_card
+    )
+    breakdown.grand_total = (
+        breakdown.tyre_total + breakdown.phone_total + breakdown.other_total
+    )
     return breakdown
 
 
@@ -299,7 +319,7 @@ async def _cumulative_revenue(
     """Sum of all tyre + phone sales revenue up to given year/month."""
     total = 0.0
 
-    for model in [Sale, PhoneSale]:
+    for model in [Sale, PhoneSale, OtherSale]:
         query = select(func.coalesce(func.sum(model.total), 0))
         if up_to_year is not None and up_to_month is not None:
             query = query.where(
@@ -401,9 +421,9 @@ def _prev_month(year: int, month: int) -> tuple[int, int]:
 async def _month_revenue(
     db: AsyncSession, year: int, month: int
 ) -> float:
-    """Sum of all tyre + phone sales revenue for a single month."""
+    """Sum of all tyre + phone + other sales revenue for a single month."""
     total = 0.0
-    for model in [Sale, PhoneSale]:
+    for model in [Sale, PhoneSale, OtherSale]:
         result = await db.execute(
             select(func.coalesce(func.sum(model.total), 0)).where(
                 func.extract("year", model.sale_date) == year,

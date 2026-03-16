@@ -24,15 +24,23 @@ from app.routers import (
     phone_losses,
     phone_dashboard,
     phone_sync,
+    others,
+    other_sales,
+    other_inventory,
+    other_losses,
+    other_dashboard,
+    other_sync,
     stock_import,
     audit,
 )
 from app.models.sale import Sale
 from app.models.inventory import InventoryPeriod
 from app.models.phone_inventory import PhoneInventoryPeriod
+from app.models.other_inventory import OtherInventoryPeriod
 from app.utils.auth import hash_password
 from app.services.inventory_service import rollover_month
 from app.services.phone_inventory_service import rollover_phone_month
+from app.services.other_inventory_service import rollover_other_month
 
 import logging
 
@@ -102,6 +110,37 @@ async def _fix_phone_inventory_rollover() -> None:
         await session.commit()
 
 
+async def _fix_other_inventory_rollover() -> None:
+    """Re-rollover other product inventory so each month's initial = previous month's remaining."""
+    async with async_session_factory() as session:
+        from sqlalchemy import func, distinct
+
+        result = await session.execute(
+            select(
+                OtherInventoryPeriod.year,
+                OtherInventoryPeriod.month,
+            )
+            .distinct()
+            .order_by(OtherInventoryPeriod.year, OtherInventoryPeriod.month)
+        )
+        periods = result.all()
+        if len(periods) < 2:
+            return
+
+        for i in range(len(periods) - 1):
+            from_year, from_month = periods[i]
+            to_year, to_month = periods[i + 1]
+            count = await rollover_other_month(
+                session, from_year, from_month, to_year, to_month
+            )
+            if count > 0:
+                logger.info(
+                    "Fixed other rollover %d/%d -> %d/%d: %d records updated",
+                    from_year, from_month, to_year, to_month, count,
+                )
+        await session.commit()
+
+
 async def _fix_discount_format() -> None:
     """One-time fix: convert decimal discounts (0.05) to percentage (5)."""
     async with async_session_factory() as session:
@@ -160,6 +199,7 @@ async def lifespan(app: FastAPI):
     await _fix_discount_format()
     await _fix_inventory_rollover()
     await _fix_phone_inventory_rollover()
+    await _fix_other_inventory_rollover()
     yield
     # Shutdown (nothing to clean up)
 
@@ -196,6 +236,12 @@ app.include_router(phone_inventory.router, prefix=API_PREFIX)
 app.include_router(phone_losses.router, prefix=API_PREFIX)
 app.include_router(phone_dashboard.router, prefix=API_PREFIX)
 app.include_router(phone_sync.router, prefix=API_PREFIX)
+app.include_router(others.router, prefix=API_PREFIX)
+app.include_router(other_sales.router, prefix=API_PREFIX)
+app.include_router(other_inventory.router, prefix=API_PREFIX)
+app.include_router(other_losses.router, prefix=API_PREFIX)
+app.include_router(other_dashboard.router, prefix=API_PREFIX)
+app.include_router(other_sync.router, prefix=API_PREFIX)
 app.include_router(stock_import.router, prefix=API_PREFIX)
 app.include_router(audit.router, prefix=API_PREFIX)
 

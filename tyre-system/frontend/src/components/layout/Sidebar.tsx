@@ -34,7 +34,7 @@ const navItems = [
 export default function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
-  const { productType, setProductType, isTyre } = useProductType();
+  const { productType, setProductType, isTyre, isPhone } = useProductType();
 
   return (
     <aside
@@ -46,7 +46,7 @@ export default function Sidebar() {
       <div className="flex items-center justify-between px-4 py-5 border-b border-slate-700">
         {!collapsed && (
           <span className="text-lg font-bold tracking-tight">
-            {isTyre ? 'Tyre Manager' : 'Phone Manager'}
+            {isTyre ? 'Tyre Manager' : isPhone ? 'Phone Manager' : 'Others Manager'}
           </span>
         )}
         <button
@@ -62,11 +62,11 @@ export default function Sidebar() {
       <div className={cn('px-2 py-3 border-b border-slate-700', collapsed && 'px-1')}>
         {collapsed ? (
           <button
-            onClick={() => setProductType(isTyre ? 'phone' : 'tyre')}
+            onClick={() => setProductType(isTyre ? 'phone' : isPhone ? 'other' : 'tyre')}
             className="w-full flex items-center justify-center p-2 rounded text-xs font-bold bg-slate-800 hover:bg-slate-700 transition-colors"
-            title={`Switch to ${isTyre ? 'Phones' : 'Tyres'}`}
+            title={`Switch to ${isTyre ? 'Phones' : isPhone ? 'Others' : 'Tyres'}`}
           >
-            {isTyre ? 'T' : 'P'}
+            {isTyre ? 'T' : isPhone ? 'P' : 'O'}
           </button>
         ) : (
           <div className="flex rounded-lg bg-slate-800 p-0.5">
@@ -91,6 +91,17 @@ export default function Sidebar() {
               )}
             >
               Phones
+            </button>
+            <button
+              onClick={() => setProductType('other')}
+              className={cn(
+                'flex-1 py-1.5 text-xs font-medium rounded-md transition-colors',
+                productType === 'other'
+                  ? 'bg-amber-600 text-white'
+                  : 'text-slate-400 hover:text-white',
+              )}
+            >
+              Others
             </button>
           </div>
         )}

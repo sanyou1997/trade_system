@@ -77,6 +77,14 @@ export function getMonthName(month: number): string {
   return months[month - 1] ?? '';
 }
 
+export function formatOtherLabel(
+  name?: string | null,
+  fallbackId?: number,
+): string {
+  if (!name) return fallbackId != null ? `#${fallbackId}` : 'Unknown';
+  return name;
+}
+
 export function formatPhoneLabel(
   brand?: string | null,
   model?: string | null,

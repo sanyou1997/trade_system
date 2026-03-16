@@ -19,8 +19,15 @@ import {
   usePhoneSalesTrend,
   usePhoneRecentSales,
 } from '@/hooks/usePhoneDashboard';
+import {
+  useOtherDailySummary,
+  useOtherWeChatMessage,
+  useOtherSalesTrend,
+  useOtherRecentSales,
+} from '@/hooks/useOtherDashboard';
 import { useLowStock } from '@/hooks/useInventory';
 import { usePhoneLowStock } from '@/hooks/usePhoneInventory';
+import { useOtherLowStock } from '@/hooks/useOtherInventory';
 import { useProductType } from '@/lib/product-context';
 import {
   formatMWK,
@@ -28,8 +35,9 @@ import {
   formatDate,
   formatTyreLabel,
   formatPhoneLabel,
+  formatOtherLabel,
 } from '@/lib/utils';
-import { Sale, PhoneSale, InventoryItem, PhoneInventoryItem } from '@/lib/types';
+import { Sale, PhoneSale, OtherSale, InventoryItem, PhoneInventoryItem, OtherInventoryItem } from '@/lib/types';
 import {
   ShoppingCart,
   TrendingUp,
@@ -52,7 +60,7 @@ import {
 } from 'recharts';
 
 export default function DashboardPage() {
-  const { isTyre } = useProductType();
+  const { isTyre, isPhone } = useProductType();
   const today = formatDateISO(new Date());
   const [selectedDate, setSelectedDate] = useState(today);
 
@@ -74,11 +82,18 @@ export default function DashboardPage() {
   const phoneRecent = usePhoneRecentSales(10);
   const phoneLowStock = usePhoneLowStock();
 
+  // Other hooks
+  const otherSummary = useOtherDailySummary(selectedDate);
+  const otherWechat = useOtherWeChatMessage(selectedDate);
+  const otherTrend = useOtherSalesTrend(year, month);
+  const otherRecent = useOtherRecentSales(10);
+  const otherLowStock = useOtherLowStock(year, month);
+
   // Select active data
-  const summary = isTyre ? tyreSummary.data : phoneSummary.data;
-  const summaryLoading = isTyre ? tyreSummary.isLoading : phoneSummary.isLoading;
-  const wechat = isTyre ? tyreWechat.data : phoneWechat.data;
-  const trend = isTyre ? tyreTrend.data : phoneTrend.data;
+  const summary = isTyre ? tyreSummary.data : isPhone ? phoneSummary.data : otherSummary.data;
+  const summaryLoading = isTyre ? tyreSummary.isLoading : isPhone ? phoneSummary.isLoading : otherSummary.isLoading;
+  const wechat = isTyre ? tyreWechat.data : isPhone ? phoneWechat.data : otherWechat.data;
+  const trend = isTyre ? tyreTrend.data : isPhone ? phoneTrend.data : otherTrend.data;
 
   const revenueBreakdown = useMemo(() => {
     if (!summary) return [];
@@ -91,7 +106,7 @@ export default function DashboardPage() {
 
   const totalRevenue = summary?.total_revenue_mwk ?? 0;
 
-  const productLabel = isTyre ? 'Tyres' : 'Phones';
+  const productLabel = isTyre ? 'Tyres' : isPhone ? 'Phones' : 'Others';
 
   // Tyre recent sales columns
   const tyreRecentColumns: Column<Sale>[] = [
@@ -143,6 +158,44 @@ export default function DashboardPage() {
       label: 'Phone',
       render: (s) =>
         formatPhoneLabel(s.phone_brand, s.phone_model, s.phone_config, s.phone_id),
+    },
+    { key: 'quantity', label: 'Qty', className: 'text-center' },
+    {
+      key: 'total',
+      label: 'Total',
+      render: (s) => formatMWK(s.total),
+    },
+    {
+      key: 'payment_method',
+      label: 'Payment',
+      render: (s) => (
+        <Badge
+          variant={
+            s.payment_method === 'Cash'
+              ? 'info'
+              : s.payment_method === 'Mukuru'
+                ? 'success'
+                : 'warning'
+          }
+        >
+          {s.payment_method}
+        </Badge>
+      ),
+    },
+  ];
+
+  // Other recent sales columns
+  const otherRecentColumns: Column<OtherSale>[] = [
+    {
+      key: 'sale_date',
+      label: 'Date',
+      render: (s) => formatDate(s.sale_date),
+    },
+    {
+      key: 'product',
+      label: 'Product',
+      render: (s) =>
+        formatOtherLabel(s.product_name, s.other_product_id),
     },
     { key: 'quantity', label: 'Qty', className: 'text-center' },
     {
@@ -293,9 +346,13 @@ export default function DashboardPage() {
               ? tyreLowStock.data && tyreLowStock.data.length > 0
                 ? <Badge variant="danger">{tyreLowStock.data.length} items</Badge>
                 : null
-              : phoneLowStock.data && phoneLowStock.data.length > 0
-                ? <Badge variant="danger">{phoneLowStock.data.length} items</Badge>
-                : null
+              : isPhone
+                ? phoneLowStock.data && phoneLowStock.data.length > 0
+                  ? <Badge variant="danger">{phoneLowStock.data.length} items</Badge>
+                  : null
+                : otherLowStock.data && otherLowStock.data.length > 0
+                  ? <Badge variant="danger">{otherLowStock.data.length} items</Badge>
+                  : null
           }
         >
           {isTyre ? (
@@ -323,7 +380,7 @@ export default function DashboardPage() {
                 All stock levels are healthy.
               </p>
             )
-          ) : (
+          ) : isPhone ? (
             phoneLowStock.data && phoneLowStock.data.length > 0 ? (
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {phoneLowStock.data.map((item: PhoneInventoryItem) => (
@@ -335,6 +392,31 @@ export default function DashboardPage() {
                       <AlertTriangle size={14} className="text-red-500" />
                       <span className="text-slate-700">
                         {item.brand} {item.model}
+                      </span>
+                    </div>
+                    <span className="font-medium text-red-600">
+                      {item.remaining_stock} left
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-400 py-4 text-center">
+                All stock levels are healthy.
+              </p>
+            )
+          ) : (
+            otherLowStock.data && otherLowStock.data.length > 0 ? (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {otherLowStock.data.map((item: OtherInventoryItem) => (
+                  <div
+                    key={item.other_product_id}
+                    className="flex items-center justify-between px-3 py-2 bg-red-50 rounded text-sm"
+                  >
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle size={14} className="text-red-500" />
+                      <span className="text-slate-700">
+                        {item.name}
                       </span>
                     </div>
                     <span className="font-medium text-red-600">
@@ -361,10 +443,17 @@ export default function DashboardPage() {
                 keyExtractor={(s) => s.id}
                 emptyMessage="No recent sales."
               />
-            ) : (
+            ) : isPhone ? (
               <Table
                 columns={phoneRecentColumns}
                 data={phoneRecent.data ?? []}
+                keyExtractor={(s) => s.id}
+                emptyMessage="No recent sales."
+              />
+            ) : (
+              <Table
+                columns={otherRecentColumns}
+                data={otherRecent.data ?? []}
                 keyExtractor={(s) => s.id}
                 emptyMessage="No recent sales."
               />

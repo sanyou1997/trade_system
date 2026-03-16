@@ -20,7 +20,7 @@ interface ImportStockModalProps {
   onClose: () => void;
   year: number;
   month: number;
-  productType?: 'tyre' | 'phone';
+  productType?: 'tyre' | 'phone' | 'other';
 }
 
 export default function ImportStockModal({

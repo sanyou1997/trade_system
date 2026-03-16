@@ -83,7 +83,7 @@ function FilePicker({
 
 export default function SyncPage() {
   const { toast } = useToast();
-  const { isTyre } = useProductType();
+  const { isTyre, isPhone, isOther } = useProductType();
   const queryClient = useQueryClient();
 
   const [year, setYear] = useState(String(currentYear));
@@ -104,7 +104,7 @@ export default function SyncPage() {
     queryFn: () => api.get<SyncLogEntry[]>('/sync/history'),
   });
 
-  const syncPrefix = isTyre ? '/sync' : '/phone-sync';
+  const syncPrefix = isTyre ? '/sync' : isPhone ? '/phone-sync' : '/other-sync';
 
   const invalidateAll = () => {
     if (isTyre) {
@@ -112,11 +112,16 @@ export default function SyncPage() {
       queryClient.removeQueries({ queryKey: ['inventory'] });
       queryClient.removeQueries({ queryKey: ['tyres'] });
       queryClient.removeQueries({ queryKey: ['sales'] });
-    } else {
+    } else if (isPhone) {
       queryClient.removeQueries({ queryKey: ['phone-dashboard'] });
       queryClient.removeQueries({ queryKey: ['phone-inventory'] });
       queryClient.removeQueries({ queryKey: ['phones'] });
       queryClient.removeQueries({ queryKey: ['phone-sales'] });
+    } else {
+      queryClient.removeQueries({ queryKey: ['other-dashboard'] });
+      queryClient.removeQueries({ queryKey: ['other-inventory'] });
+      queryClient.removeQueries({ queryKey: ['others'] });
+      queryClient.removeQueries({ queryKey: ['other-sales'] });
     }
     queryClient.removeQueries({ queryKey: ['payments'] });
     queryClient.invalidateQueries({ queryKey: ['sync'] });
@@ -134,8 +139,8 @@ export default function SyncPage() {
         `${syncPrefix}/import/inventory?${params}`,
         inventoryFile,
       );
-      const count = isTyre ? result.tyres_imported : result.phones_imported;
-      toast('success', `Inventory imported: ${count ?? 0} ${isTyre ? 'tyres' : 'phones'}.`);
+      const count = isTyre ? result.tyres_imported : isPhone ? result.phones_imported : result.items_imported;
+      toast('success', `Inventory imported: ${count ?? 0} ${isTyre ? 'tyres' : isPhone ? 'phones' : 'items'}.`);
       setInventoryFile(null);
       invalidateAll();
     } catch (err) {
@@ -298,7 +303,7 @@ export default function SyncPage() {
     { key: 'file_path', label: 'File' },
   ];
 
-  const productLabel = isTyre ? 'tyre' : 'phone';
+  const productLabel = isTyre ? 'tyre' : isPhone ? 'phone' : 'other';
 
   return (
     <MainLayout title="Excel Sync">
@@ -316,101 +321,127 @@ export default function SyncPage() {
         </div>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-        <Card title={`Import ${isTyre ? 'Tyre' : 'Phone'} Data`}>
-          <div className="space-y-6">
-            <p className="text-sm text-slate-500">
-              Select a local Excel file to upload and import into the database.
-            </p>
-
-            <div className="border rounded-lg p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <FileSpreadsheet size={18} className="text-green-600" />
-                <h3 className="font-medium text-slate-700">Inventory File</h3>
-              </div>
-              <p className="text-xs text-slate-500">
-                Imports {productLabel} master data, stock levels, and exchange rate.
+      {isOther ? (
+        <div className="mt-6">
+          <Card title="Import Other Inventory">
+            <div className="space-y-6">
+              <p className="text-sm text-slate-500">
+                Upload an Excel file with 3 columns (Name, Cost, Selling Price) to import other product inventory.
               </p>
-              <FilePicker file={inventoryFile} onChange={setInventoryFile} placeholder="Select inventory .xlsx file" />
-              <Button onClick={handleImportInventory} loading={importingInventory} variant="secondary" className="justify-start w-full" disabled={!inventoryFile}>
-                <Upload size={16} /> Import Inventory
-              </Button>
-            </div>
 
-            <div className="border rounded-lg p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <FileSpreadsheet size={18} className="text-blue-600" />
-                <h3 className="font-medium text-slate-700">Monthly Invoice</h3>
-              </div>
-              <p className="text-xs text-slate-500">
-                Imports sales records, payments, losses, and exchange rates.
-              </p>
-              <FilePicker file={invoiceFile} onChange={setInvoiceFile} placeholder="Select invoice .xlsx file" />
-              <Button onClick={handleImportInvoice} loading={importingInvoice} variant="secondary" className="justify-start w-full" disabled={!invoiceFile}>
-                <Upload size={16} /> Import Invoice
-              </Button>
-            </div>
-
-            <div className="border rounded-lg p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <FileSpreadsheet size={18} className="text-orange-600" />
-                <h3 className="font-medium text-slate-700">Daily Sales File</h3>
-              </div>
-              <p className="text-xs text-slate-500">
-                Imports sales and payments from a single daily sales file.
-              </p>
-              <FilePicker file={dailyFile} onChange={setDailyFile} placeholder="Select daily sales .xlsx file" />
-              <Button onClick={handleImportDailySales} loading={importingDaily} variant="secondary" className="justify-start w-full" disabled={!dailyFile}>
-                <Upload size={16} /> Import Daily Sales
-              </Button>
-            </div>
-          </div>
-        </Card>
-
-        <Card title={`Export ${isTyre ? 'Tyre' : 'Phone'} Data`}>
-          <div className="space-y-6">
-            <p className="text-sm text-slate-500">
-              Export data to Excel files and download them. Auto-creates sheets/files if they don&apos;t exist yet.
-            </p>
-
-            <div className="border rounded-lg p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <FileSpreadsheet size={18} className="text-green-600" />
-                <h3 className="font-medium text-slate-700">Inventory File</h3>
-              </div>
-              <p className="text-xs text-slate-500">
-                Writes daily sales quantities and stock levels to the inventory Excel file.
-              </p>
-              <div className="flex gap-2">
-                <Button onClick={handleExportInventory} loading={exportingInventory} className="flex-1 justify-center">
-                  <Download size={16} /> Export
-                </Button>
-                <Button onClick={handleDownloadInventory} variant="secondary" className="justify-center">
-                  <FileDown size={16} /> Download
+              <div className="border rounded-lg p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <FileSpreadsheet size={18} className="text-green-600" />
+                  <h3 className="font-medium text-slate-700">Inventory File</h3>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Imports other product master data and stock levels for the selected period.
+                </p>
+                <FilePicker file={inventoryFile} onChange={setInventoryFile} placeholder="Select inventory .xlsx file" />
+                <Button onClick={handleImportInventory} loading={importingInventory} variant="secondary" className="justify-start w-full" disabled={!inventoryFile}>
+                  <Upload size={16} /> Import Inventory
                 </Button>
               </div>
             </div>
-
-            <div className="border rounded-lg p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <FileSpreadsheet size={18} className="text-blue-600" />
-                <h3 className="font-medium text-slate-700">Monthly Invoice</h3>
-              </div>
-              <p className="text-xs text-slate-500">
-                Exports sales, payments, and losses to the invoice Excel file.
+          </Card>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+          <Card title={`Import ${isTyre ? 'Tyre' : 'Phone'} Data`}>
+            <div className="space-y-6">
+              <p className="text-sm text-slate-500">
+                Select a local Excel file to upload and import into the database.
               </p>
-              <div className="flex gap-2">
-                <Button onClick={handleExportInvoice} loading={exportingInvoice} className="flex-1 justify-center">
-                  <Download size={16} /> Export
+
+              <div className="border rounded-lg p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <FileSpreadsheet size={18} className="text-green-600" />
+                  <h3 className="font-medium text-slate-700">Inventory File</h3>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Imports {productLabel} master data, stock levels, and exchange rate.
+                </p>
+                <FilePicker file={inventoryFile} onChange={setInventoryFile} placeholder="Select inventory .xlsx file" />
+                <Button onClick={handleImportInventory} loading={importingInventory} variant="secondary" className="justify-start w-full" disabled={!inventoryFile}>
+                  <Upload size={16} /> Import Inventory
                 </Button>
-                <Button onClick={handleDownloadInvoice} variant="secondary" className="justify-center">
-                  <FileDown size={16} /> Download
+              </div>
+
+              <div className="border rounded-lg p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <FileSpreadsheet size={18} className="text-blue-600" />
+                  <h3 className="font-medium text-slate-700">Monthly Invoice</h3>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Imports sales records, payments, losses, and exchange rates.
+                </p>
+                <FilePicker file={invoiceFile} onChange={setInvoiceFile} placeholder="Select invoice .xlsx file" />
+                <Button onClick={handleImportInvoice} loading={importingInvoice} variant="secondary" className="justify-start w-full" disabled={!invoiceFile}>
+                  <Upload size={16} /> Import Invoice
+                </Button>
+              </div>
+
+              <div className="border rounded-lg p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <FileSpreadsheet size={18} className="text-orange-600" />
+                  <h3 className="font-medium text-slate-700">Daily Sales File</h3>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Imports sales and payments from a single daily sales file.
+                </p>
+                <FilePicker file={dailyFile} onChange={setDailyFile} placeholder="Select daily sales .xlsx file" />
+                <Button onClick={handleImportDailySales} loading={importingDaily} variant="secondary" className="justify-start w-full" disabled={!dailyFile}>
+                  <Upload size={16} /> Import Daily Sales
                 </Button>
               </div>
             </div>
-          </div>
-        </Card>
-      </div>
+          </Card>
+
+          <Card title={`Export ${isTyre ? 'Tyre' : 'Phone'} Data`}>
+            <div className="space-y-6">
+              <p className="text-sm text-slate-500">
+                Export data to Excel files and download them. Auto-creates sheets/files if they don&apos;t exist yet.
+              </p>
+
+              <div className="border rounded-lg p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <FileSpreadsheet size={18} className="text-green-600" />
+                  <h3 className="font-medium text-slate-700">Inventory File</h3>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Writes daily sales quantities and stock levels to the inventory Excel file.
+                </p>
+                <div className="flex gap-2">
+                  <Button onClick={handleExportInventory} loading={exportingInventory} className="flex-1 justify-center">
+                    <Download size={16} /> Export
+                  </Button>
+                  <Button onClick={handleDownloadInventory} variant="secondary" className="justify-center">
+                    <FileDown size={16} /> Download
+                  </Button>
+                </div>
+              </div>
+
+              <div className="border rounded-lg p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <FileSpreadsheet size={18} className="text-blue-600" />
+                  <h3 className="font-medium text-slate-700">Monthly Invoice</h3>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Exports sales, payments, and losses to the invoice Excel file.
+                </p>
+                <div className="flex gap-2">
+                  <Button onClick={handleExportInvoice} loading={exportingInvoice} className="flex-1 justify-center">
+                    <Download size={16} /> Export
+                  </Button>
+                  <Button onClick={handleDownloadInvoice} variant="secondary" className="justify-center">
+                    <FileDown size={16} /> Download
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
 
       <div className="mt-6">
         <Card title="Sync History">
