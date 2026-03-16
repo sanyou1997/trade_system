@@ -931,6 +931,19 @@ export default function AuditPage() {
           </div>
 
           <Card title="Transaction History">
+            {transactions.length > 0 && (
+              <div className="mb-3 p-3 bg-slate-50 rounded-lg flex flex-wrap gap-x-6 gap-y-1 text-sm">
+                <span className="text-slate-500">
+                  {txnTotal} transaction{txnTotal !== 1 ? 's' : ''}
+                </span>
+                <span className="font-medium text-slate-700">
+                  Total: {formatMWK(transactions.reduce((sum, t) => sum + t.amount_mwk, 0))}
+                  {txnTotal > transactions.length && (
+                    <span className="text-xs text-slate-400 ml-1">(this page)</span>
+                  )}
+                </span>
+              </div>
+            )}
             <Table
               columns={txnColumns}
               data={transactions}
