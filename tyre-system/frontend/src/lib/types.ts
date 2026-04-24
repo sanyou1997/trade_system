@@ -503,6 +503,40 @@ export interface TyreImportConfirmItem {
   category: string;
 }
 
+// --- Other Stock Import Types ---
+
+export interface OtherImportPreviewItem {
+  row_number: number;
+  name: string;
+  category: string;
+  note: string;
+  suggested_price: number;
+  quantity: number;
+  matched: boolean;
+  other_product_id: number | null;
+  current_added_stock: number | null;
+}
+
+export interface OtherImportPreviewResult {
+  file_name: string;
+  total_rows: number;
+  matched_rows: number;
+  unmatched_rows: number;
+  total_quantity: number;
+  items: OtherImportPreviewItem[];
+  all_matched: boolean;
+}
+
+export interface OtherImportConfirmItem {
+  other_product_id: number | null;
+  quantity: number;
+  create_new: boolean;
+  name: string;
+  category: string;
+  note: string;
+  suggested_price: number;
+}
+
 // --- Audit / Cost Types ---
 
 export type TransactionType = 'expense' | 'transfer' | 'exchange' | 'income';

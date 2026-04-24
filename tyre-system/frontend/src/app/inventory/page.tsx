@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { FormEvent, useState, useMemo } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import { StatCard } from '@/components/ui/Card';
 import Select from '@/components/ui/Select';
@@ -13,13 +13,17 @@ import { useAuth } from '@/hooks/useAuth';
 import { useProductType } from '@/lib/product-context';
 import { cn, formatMWK, roundTo1000 } from '@/lib/utils';
 import { useSettings } from '@/hooks/useSettings';
+import { api } from '@/lib/api';
 import { InventoryItem, PhoneInventoryItem, OtherInventoryItem, TyreCategory } from '@/lib/types';
 import Button from '@/components/ui/Button';
+import Modal from '@/components/ui/Modal';
+import Input from '@/components/ui/Input';
 import ImportStockModal from '@/components/ui/ImportStockModal';
 import ImportHistoryPanel from '@/components/ui/ImportHistoryPanel';
 import AddProductModal from '@/components/ui/AddProductModal';
 import PriceEditModal from '@/components/ui/PriceEditModal';
-import { Package, ArrowDownToLine, ArrowUpFromLine, ShoppingCart, Boxes, Search, X, AlertTriangle, Upload, Plus } from 'lucide-react';
+import { useBulkPriceAdjust } from '@/hooks/usePriceUpdate';
+import { Package, ArrowDownToLine, ArrowUpFromLine, ShoppingCart, Boxes, Search, X, AlertTriangle, Upload, Plus, Percent } from 'lucide-react';
 
 const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => ({
   value: String(i + 1),
@@ -62,6 +66,9 @@ export default function InventoryPage() {
     value: string;
   } | null>(null);
   const [importModalOpen, setImportModalOpen] = useState(false);
+  const [bulkPriceModalOpen, setBulkPriceModalOpen] = useState(false);
+  const [bulkPercentage, setBulkPercentage] = useState('');
+  const [bulkPassword, setBulkPassword] = useState('');
   const [addProductModalOpen, setAddProductModalOpen] = useState(false);
   const [priceEditModal, setPriceEditModal] = useState<{
     productId: number;
@@ -90,6 +97,7 @@ export default function InventoryPage() {
     Number(month),
   );
   const updateOtherStock = useUpdateOtherStock();
+  const bulkPriceAdjust = useBulkPriceAdjust();
 
   const isLoading = isTyre ? tyreLoading : isPhone ? phoneLoading : otherLoading;
 
@@ -270,6 +278,59 @@ export default function InventoryPage() {
     }
   }
 
+  async function handleExportStock() {
+    const productType = isTyre ? 'tyre' : isPhone ? 'phone' : 'other';
+    const params = new URLSearchParams({
+      product_type: productType,
+      year,
+      month,
+    });
+
+    try {
+      const blob = await api.download(`/stock-import/export?${params}`);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${productType}_stock_${year}_${month.padStart(2, '0')}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      toast('success', 'Stock export downloaded.');
+    } catch (err) {
+      toast('error', err instanceof Error ? err.message : 'Export failed.');
+    }
+  }
+
+  async function handleBulkPriceAdjust(e: FormEvent) {
+    e.preventDefault();
+
+    const percentage = Number(bulkPercentage);
+    if (isNaN(percentage) || percentage <= -100) {
+      toast('error', 'Please enter a percentage greater than -100.');
+      return;
+    }
+    if (!bulkPassword) {
+      toast('error', 'Please enter the password.');
+      return;
+    }
+
+    const productType = isTyre ? 'tyre' : isPhone ? 'phone' : 'other';
+    try {
+      const result = await bulkPriceAdjust.mutateAsync({
+        product_type: productType,
+        password: bulkPassword,
+        percentage,
+      }) as { updated_count?: number };
+      toast('success', `Updated ${result.updated_count ?? 0} prices.`);
+      setBulkPriceModalOpen(false);
+      setBulkPercentage('');
+      setBulkPassword('');
+    } catch (err) {
+      toast('error', err instanceof Error ? err.message : 'Bulk price update failed.');
+    }
+  }
+
   function renderEditableCell(
     productId: number,
     field: 'initial_stock' | 'added_stock',
@@ -324,7 +385,12 @@ export default function InventoryPage() {
           productId: item.tyre_id,
           productType: 'tyre',
           productLabel: `${item.size} ${item.brand || ''}`.trim(),
-          currentPrices: { suggested_price: item.suggested_price },
+          currentPrices: {
+            suggested_price: item.suggested_price,
+            mukuru_price: calculateMukuruPrice(item.suggested_price),
+            cash_rate: cashRate,
+            mukuru_rate: mukuruRate,
+          },
         })}
         title="Click to edit price"
       >
@@ -334,7 +400,25 @@ export default function InventoryPage() {
     { key: 'mukuru_price' as keyof InventoryItem, label: 'Mukuru Price', render: (item) => {
       const mp = calculateMukuruPrice(item.suggested_price);
       return mp > 0
-        ? <span className="text-slate-700">{formatMWK(mp)}</span>
+        ? (
+          <button
+            className="hover:bg-blue-50 px-1 py-0.5 rounded cursor-pointer text-left"
+            onClick={() => setPriceEditModal({
+              productId: item.tyre_id,
+              productType: 'tyre',
+              productLabel: `${item.size} ${item.brand || ''}`.trim(),
+              currentPrices: {
+                suggested_price: item.suggested_price,
+                mukuru_price: mp,
+                cash_rate: cashRate,
+                mukuru_rate: mukuruRate,
+              },
+            })}
+            title="Click to edit price"
+          >
+            {formatMWK(mp)}
+          </button>
+        )
         : <span className="text-slate-400 text-xs">N/A</span>;
     } },
     { key: 'initial_stock', label: 'Initial', sortable: true, className: 'text-center', render: (item) => renderEditableCell(item.tyre_id, 'initial_stock', item.initial_stock) },
@@ -428,8 +512,14 @@ export default function InventoryPage() {
         <Select label="Month" options={MONTH_OPTIONS} value={month} onChange={(e) => setMonth(e.target.value)} className="w-36" />
 
         <div className="flex gap-2 items-end">
+          <Button variant="secondary" size="sm" onClick={handleExportStock}>
+            <ArrowDownToLine size={14} /> Export Stock
+          </Button>
           <Button variant="secondary" size="sm" onClick={() => setImportModalOpen(true)}>
             <Upload size={14} /> Import Stock
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => setBulkPriceModalOpen(true)}>
+            <Percent size={14} /> Adjust Prices
           </Button>
           <Button variant="secondary" size="sm" onClick={() => setAddProductModalOpen(true)}>
             <Plus size={14} /> Add {productTypeLabel}
@@ -607,6 +697,50 @@ export default function InventoryPage() {
         productLabel={priceEditModal?.productLabel ?? ''}
         currentPrices={priceEditModal?.currentPrices ?? {}}
       />
+      <Modal
+        open={bulkPriceModalOpen}
+        onClose={() => setBulkPriceModalOpen(false)}
+        title={`Adjust ${productTypeLabel} Prices`}
+      >
+        <form onSubmit={handleBulkPriceAdjust} className="space-y-4">
+          <p className="text-sm text-slate-600">
+            Apply a percentage change to all {productTypeLabel.toLowerCase()} prices.
+            Values are rounded to the nearest 1,000 MWK.
+          </p>
+          <Input
+            label="Percentage"
+            type="number"
+            value={bulkPercentage}
+            onChange={(e) => setBulkPercentage(e.target.value)}
+            placeholder="Example: 5 or -10"
+            step={0.01}
+          />
+          <Input
+            label="Password"
+            type="password"
+            value={bulkPassword}
+            onChange={(e) => setBulkPassword(e.target.value)}
+            placeholder="Enter password to confirm"
+          />
+          <div className="flex gap-2 pt-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setBulkPriceModalOpen(false)}
+              className="flex-1 justify-center"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              loading={bulkPriceAdjust.isPending}
+              className="flex-1 justify-center"
+            >
+              Apply
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </MainLayout>
   );
 }

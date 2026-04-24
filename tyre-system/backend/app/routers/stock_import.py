@@ -3,6 +3,7 @@ import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, Body, Depends, File, Query, UploadFile
+from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,6 +11,7 @@ from app.database import get_db
 from app.schemas.common import ApiResponse
 from app.schemas.stock_import import (
     ImportConfirmItem,
+    OtherImportConfirmItem,
     StockImportLogResponse,
     TyreImportConfirmItem,
 )
@@ -45,6 +47,10 @@ async def preview_stock_import(
             result = await stock_import_service.preview_tyre_import(
                 db, str(tmp_path), file.filename or "unknown.xlsx", year, month,
             )
+        elif product_type == "other":
+            result = await stock_import_service.preview_other_import(
+                db, str(tmp_path), file.filename or "unknown.xlsx", year, month,
+            )
         else:
             result = await stock_import_service.preview_import(
                 db, str(tmp_path), file.filename or "unknown.xlsx", year, month,
@@ -71,6 +77,11 @@ async def confirm_stock_import(
             tyre_items = [TyreImportConfirmItem(**item) for item in body]
             log = await stock_import_service.confirm_tyre_import(
                 db, year, month, file_name, tyre_items,
+            )
+        elif product_type == "other":
+            other_items = [OtherImportConfirmItem(**item) for item in body]
+            log = await stock_import_service.confirm_other_import(
+                db, year, month, file_name, other_items,
             )
         else:
             items = [ImportConfirmItem(**item) for item in body]
@@ -112,4 +123,23 @@ async def get_import_history(
     logs = await stock_import_service.get_import_history(db, product_type)
     return ApiResponse.ok(
         [StockImportLogResponse.model_validate(log).model_dump() for log in logs]
+    )
+
+
+@router.get("/export")
+async def export_stock(
+    year: int = Query(...),
+    month: int = Query(..., ge=1, le=12),
+    product_type: str = Query("phone"),
+    db: AsyncSession = Depends(get_db),
+) -> StreamingResponse:
+    """Export current remaining stock in an import-compatible Excel file."""
+    stream = await stock_import_service.export_stock_workbook(
+        db, product_type, year, month
+    )
+    filename = f"{product_type}_stock_{year}_{month:02d}.xlsx"
+    return StreamingResponse(
+        stream,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

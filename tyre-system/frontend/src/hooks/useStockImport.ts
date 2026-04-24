@@ -5,6 +5,8 @@ import { api } from '@/lib/api';
 import {
   ImportPreviewResult,
   ImportConfirmItem,
+  OtherImportConfirmItem,
+  OtherImportPreviewResult,
   TyreImportPreviewResult,
   TyreImportConfirmItem,
   StockImportLogEntry,
@@ -23,7 +25,7 @@ export function useStockImportPreview() {
       month: number;
       productType?: string;
     }) =>
-      api.uploadWithParams<ImportPreviewResult | TyreImportPreviewResult>(
+      api.uploadWithParams<ImportPreviewResult | TyreImportPreviewResult | OtherImportPreviewResult>(
         '/stock-import/preview',
         file,
         { year: String(year), month: String(month), product_type: productType },
@@ -45,7 +47,7 @@ export function useStockImportConfirm() {
       year: number;
       month: number;
       file_name: string;
-      items: ImportConfirmItem[] | TyreImportConfirmItem[];
+      items: ImportConfirmItem[] | TyreImportConfirmItem[] | OtherImportConfirmItem[];
       productType?: string;
     }) => {
       const params = new URLSearchParams({
@@ -63,6 +65,10 @@ export function useStockImportConfirm() {
       if (variables.productType === 'tyre') {
         queryClient.invalidateQueries({ queryKey: ['inventory'] });
         queryClient.invalidateQueries({ queryKey: ['tyres'] });
+      } else if (variables.productType === 'other') {
+        queryClient.invalidateQueries({ queryKey: ['other-inventory'] });
+        queryClient.invalidateQueries({ queryKey: ['other-dashboard'] });
+        queryClient.invalidateQueries({ queryKey: ['others'] });
       } else {
         queryClient.invalidateQueries({ queryKey: ['phone-inventory'] });
         queryClient.invalidateQueries({ queryKey: ['phone-dashboard'] });
@@ -83,6 +89,9 @@ export function useStockImportRevert() {
       queryClient.invalidateQueries({ queryKey: ['tyres'] });
       queryClient.invalidateQueries({ queryKey: ['phone-inventory'] });
       queryClient.invalidateQueries({ queryKey: ['phone-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['other-inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['other-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['others'] });
       queryClient.invalidateQueries({ queryKey: ['stock-import-history'] });
     },
   });

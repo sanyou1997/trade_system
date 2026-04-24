@@ -8,6 +8,9 @@ import { useStockImportPreview, useStockImportConfirm } from '@/hooks/useStockIm
 import {
   ImportPreviewResult,
   ImportConfirmItem,
+  OtherImportConfirmItem,
+  OtherImportPreviewItem,
+  OtherImportPreviewResult,
   TyreImportPreviewResult,
   TyreImportPreviewItem,
   TyreImportConfirmItem,
@@ -32,10 +35,12 @@ export default function ImportStockModal({
 }: ImportStockModalProps) {
   const { toast } = useToast();
   const isTyre = productType === 'tyre';
+  const isOther = productType === 'other';
 
   const [file, setFile] = useState<File | null>(null);
   const [phonePreview, setPhonePreview] = useState<ImportPreviewResult | null>(null);
   const [tyrePreview, setTyrePreview] = useState<TyreImportPreviewResult | null>(null);
+  const [otherPreview, setOtherPreview] = useState<OtherImportPreviewResult | null>(null);
   const [createNewFlags, setCreateNewFlags] = useState<Record<number, boolean>>({});
   const [done, setDone] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -43,12 +48,13 @@ export default function ImportStockModal({
   const previewMutation = useStockImportPreview();
   const confirmMutation = useStockImportConfirm();
 
-  const preview = isTyre ? tyrePreview : phonePreview;
+  const preview = isTyre ? tyrePreview : isOther ? otherPreview : phonePreview;
 
   function handleReset() {
     setFile(null);
     setPhonePreview(null);
     setTyrePreview(null);
+    setOtherPreview(null);
     setCreateNewFlags({});
     setDone(false);
     previewMutation.reset();
@@ -87,6 +93,16 @@ export default function ImportStockModal({
           }
         }
         setCreateNewFlags(flags);
+      } else if (isOther) {
+        const otherResult = result as OtherImportPreviewResult;
+        setOtherPreview(otherResult);
+        const flags: Record<number, boolean> = {};
+        for (const item of otherResult.items) {
+          if (!item.matched) {
+            flags[item.row_number] = true;
+          }
+        }
+        setCreateNewFlags(flags);
       } else {
         setPhonePreview(result as ImportPreviewResult);
       }
@@ -101,6 +117,11 @@ export default function ImportStockModal({
     if (isTyre && tyrePreview) {
       // All items must be matched OR checked for creation
       return tyrePreview.items.every(
+        (item) => item.matched || createNewFlags[item.row_number],
+      );
+    }
+    if (isOther && otherPreview) {
+      return otherPreview.items.every(
         (item) => item.matched || createNewFlags[item.row_number],
       );
     }
@@ -143,6 +164,33 @@ export default function ImportStockModal({
       } catch (err) {
         toast('error', err instanceof Error ? err.message : 'Import failed.');
       }
+    } else if (isOther && otherPreview) {
+      const items: OtherImportConfirmItem[] = otherPreview.items
+        .filter((item) => item.matched || createNewFlags[item.row_number])
+        .map((item) => ({
+          other_product_id: item.other_product_id,
+          quantity: item.quantity,
+          create_new: !item.matched && !!createNewFlags[item.row_number],
+          name: item.name,
+          category: item.category,
+          note: item.note,
+          suggested_price: item.suggested_price,
+        }));
+
+      try {
+        await confirmMutation.mutateAsync({
+          year,
+          month,
+          file_name: otherPreview.file_name,
+          items,
+          productType: 'other',
+        });
+        const totalQty = items.reduce((sum, i) => sum + i.quantity, 0);
+        toast('success', `Successfully imported ${totalQty} units across ${items.length} products.`);
+        setDone(true);
+      } catch (err) {
+        toast('error', err instanceof Error ? err.message : 'Import failed.');
+      }
     } else if (phonePreview) {
       const items: ImportConfirmItem[] = phonePreview.items
         .filter((item) => item.matched && item.phone_id !== null)
@@ -171,7 +219,7 @@ export default function ImportStockModal({
   }
 
   const monthName = new Date(2000, month - 1).toLocaleString('en', { month: 'long' });
-  const label = isTyre ? 'Tyre' : 'Phone';
+  const label = isTyre ? 'Tyre' : isOther ? 'Other' : 'Phone';
 
   return (
     <Modal open={open} onClose={handleClose} title={`Import ${label} Stock`} size="xl">
@@ -179,11 +227,13 @@ export default function ImportStockModal({
       {!preview && !done && (
         <div className="space-y-4">
           <p className="text-sm text-slate-500">
-            Upload {isTyre ? 'a tyre batch' : 'a phone shipment'} Excel file to add stock for{' '}
+            Upload {isTyre ? 'a tyre batch' : isOther ? 'an other-product batch' : 'a phone shipment'} Excel file to add stock for{' '}
             <strong>{monthName} {year}</strong>.
             {isTyre
               ? ' The file should have columns: Size, Type, Brand, Pattern, QTY.'
-              : ' The file should have columns: Brand, Model, Config, Quantity.'}
+              : isOther
+                ? ' The file should have columns: Name, Category, Note, Suggested Price, Quantity.'
+                : ' The file should have columns: Brand, Model, Config, Quantity.'}
           </p>
 
           <div className="flex items-center gap-2">
@@ -250,7 +300,7 @@ export default function ImportStockModal({
             <span>Total Qty: <strong>{preview.total_quantity}</strong></span>
           </div>
 
-          {!preview.all_matched && !isTyre && (
+          {!preview.all_matched && !isTyre && !isOther && (
             <div className="bg-red-50 border border-red-200 rounded-md p-3">
               <p className="text-sm text-red-700">
                 Some products could not be matched. Please add unmatched products first or fix the Excel file.
@@ -258,10 +308,10 @@ export default function ImportStockModal({
             </div>
           )}
 
-          {!preview.all_matched && isTyre && (
+          {!preview.all_matched && (isTyre || isOther) && (
             <div className="bg-amber-50 border border-amber-200 rounded-md p-3">
               <p className="text-sm text-amber-700">
-                Some tyres are not in the system. Check &quot;Create&quot; to add them as new products during import.
+                Some products are not in the system. Check &quot;Create&quot; to add them as new products during import.
               </p>
             </div>
           )}
@@ -276,6 +326,18 @@ export default function ImportStockModal({
                     <th className="text-left px-3 py-2 font-medium text-slate-600">Size</th>
                     <th className="text-left px-3 py-2 font-medium text-slate-600">Brand</th>
                     <th className="text-left px-3 py-2 font-medium text-slate-600">Pattern</th>
+                    <th className="text-right px-3 py-2 font-medium text-slate-600">Qty</th>
+                    <th className="text-right px-3 py-2 font-medium text-slate-600">Current Added</th>
+                    {!preview.all_matched && (
+                      <th className="text-center px-3 py-2 font-medium text-slate-600">Create</th>
+                    )}
+                  </tr>
+                ) : isOther ? (
+                  <tr>
+                    <th className="text-left px-3 py-2 font-medium text-slate-600">Status</th>
+                    <th className="text-left px-3 py-2 font-medium text-slate-600">Name</th>
+                    <th className="text-left px-3 py-2 font-medium text-slate-600">Category</th>
+                    <th className="text-left px-3 py-2 font-medium text-slate-600">Note</th>
                     <th className="text-right px-3 py-2 font-medium text-slate-600">Qty</th>
                     <th className="text-right px-3 py-2 font-medium text-slate-600">Current Added</th>
                     {!preview.all_matched && (
@@ -304,6 +366,16 @@ export default function ImportStockModal({
                         onToggleCreate={() => toggleCreateNew(item.row_number)}
                       />
                     ))
+                  : isOther && otherPreview
+                    ? otherPreview.items.map((item, idx) => (
+                        <OtherPreviewRow
+                          key={idx}
+                          item={item}
+                          showCreateCol={!preview.all_matched}
+                          createNew={!!createNewFlags[item.row_number]}
+                          onToggleCreate={() => toggleCreateNew(item.row_number)}
+                        />
+                      ))
                   : phonePreview?.items.map((item, idx) => (
                       <tr key={idx} className={item.matched ? '' : 'bg-red-50'}>
                         <td className="px-3 py-1.5">
@@ -389,6 +461,51 @@ function TyrePreviewRow({
       <td className="px-3 py-1.5">{item.size}</td>
       <td className="px-3 py-1.5">{item.brand}</td>
       <td className="px-3 py-1.5">{item.pattern}</td>
+      <td className="px-3 py-1.5 text-right font-medium">{item.quantity}</td>
+      <td className="px-3 py-1.5 text-right text-slate-500">
+        {item.current_added_stock ?? '-'}
+      </td>
+      {showCreateCol && (
+        <td className="px-3 py-1.5 text-center">
+          {!item.matched && (
+            <input
+              type="checkbox"
+              checked={createNew}
+              onChange={onToggleCreate}
+              className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+            />
+          )}
+        </td>
+      )}
+    </tr>
+  );
+}
+
+function OtherPreviewRow({
+  item,
+  showCreateCol,
+  createNew,
+  onToggleCreate,
+}: {
+  item: OtherImportPreviewItem;
+  showCreateCol: boolean;
+  createNew: boolean;
+  onToggleCreate: () => void;
+}) {
+  return (
+    <tr className={item.matched ? '' : createNew ? 'bg-blue-50' : 'bg-red-50'}>
+      <td className="px-3 py-1.5">
+        {item.matched ? (
+          <CheckCircle2 size={16} className="text-green-500" />
+        ) : createNew ? (
+          <span className="text-xs font-medium text-blue-600">NEW</span>
+        ) : (
+          <XCircle size={16} className="text-red-500" />
+        )}
+      </td>
+      <td className="px-3 py-1.5">{item.name}</td>
+      <td className="px-3 py-1.5">{item.category}</td>
+      <td className="px-3 py-1.5">{item.note}</td>
       <td className="px-3 py-1.5 text-right font-medium">{item.quantity}</td>
       <td className="px-3 py-1.5 text-right text-slate-500">
         {item.current_added_stock ?? '-'}

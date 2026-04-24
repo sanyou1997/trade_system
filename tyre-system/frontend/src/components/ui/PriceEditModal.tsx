@@ -6,7 +6,7 @@ import Button from './Button';
 import Input from './Input';
 import { useToast } from './Toast';
 import { useUpdatePrice } from '@/hooks/usePriceUpdate';
-import { formatMWK } from '@/lib/utils';
+import { formatMWK, roundTo1000 } from '@/lib/utils';
 
 interface PriceEditModalProps {
   open: boolean;
@@ -19,6 +19,8 @@ interface PriceEditModalProps {
     cash_price?: number;
     mukuru_price?: number;
     online_price?: number;
+    cash_rate?: number;
+    mukuru_rate?: number;
   };
 }
 
@@ -58,7 +60,35 @@ export default function PriceEditModal({
       return;
     }
 
-    if (productType === 'tyre' || productType === 'other') {
+    if (productType === 'tyre') {
+      const cash = Number(suggestedPrice);
+      const mukuru = Number(mukuruPrice);
+      if (isNaN(cash) || cash < 0 || isNaN(mukuru) || mukuru < 0) {
+        toast('error', 'Please enter valid prices.');
+        return;
+      }
+
+      const currentCash = Number(currentPrices.suggested_price ?? 0);
+      const currentMukuru = Number(currentPrices.mukuru_price ?? 0);
+      const changedCash = cash !== currentCash;
+      const changedMukuru = mukuru !== currentMukuru;
+      const payload = changedMukuru && !changedCash
+        ? { mukuru_price: mukuru }
+        : { suggested_price: cash };
+
+      try {
+        await updatePrice.mutateAsync({
+          product_type: 'tyre',
+          product_id: productId,
+          password,
+          ...payload,
+        });
+        toast('success', 'Price updated successfully.');
+        onClose();
+      } catch (err) {
+        toast('error', err instanceof Error ? err.message : 'Update failed.');
+      }
+    } else if (productType === 'other') {
       const price = Number(suggestedPrice);
       if (isNaN(price) || price < 0) {
         toast('error', 'Please enter a valid price.');
@@ -104,7 +134,54 @@ export default function PriceEditModal({
   return (
     <Modal open={open} onClose={onClose} title={`Edit Price - ${productLabel}`}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        {(productType === 'tyre' || productType === 'other') ? (
+        {productType === 'tyre' ? (
+          <div className="space-y-3">
+            <div>
+              <div className="text-xs text-slate-500 mb-1">
+                Current: {formatMWK(currentPrices.suggested_price ?? 0)}
+              </div>
+              <Input
+                label="Cash Price (MWK)"
+                type="number"
+                value={suggestedPrice}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setSuggestedPrice(value);
+                  const cashRate = currentPrices.cash_rate ?? 0;
+                  const mukuruRate = currentPrices.mukuru_rate ?? 0;
+                  const cash = Number(value);
+                  if (!isNaN(cash) && cashRate > 0 && mukuruRate > 0) {
+                    setMukuruPrice(String(roundTo1000(cash * mukuruRate / cashRate)));
+                  }
+                }}
+                min={0}
+                step={1000}
+              />
+            </div>
+            <div>
+              <div className="text-xs text-slate-500 mb-1">
+                Current: {formatMWK(currentPrices.mukuru_price ?? 0)}
+              </div>
+              <Input
+                label="Mukuru Price (MWK)"
+                type="number"
+                value={mukuruPrice}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setMukuruPrice(value);
+                  const cashRate = currentPrices.cash_rate ?? 0;
+                  const mukuruRate = currentPrices.mukuru_rate ?? 0;
+                  const mukuru = Number(value);
+                  if (!isNaN(mukuru) && cashRate > 0 && mukuruRate > 0) {
+                    setSuggestedPrice(String(roundTo1000(mukuru * cashRate / mukuruRate)));
+                  }
+                }}
+                min={0}
+                step={1000}
+              />
+            </div>
+          </div>
+        ) : productType === 'other' ? (
           <div>
             <div className="text-xs text-slate-500 mb-1">
               Current: {formatMWK(currentPrices.suggested_price ?? 0)}

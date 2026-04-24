@@ -104,6 +104,20 @@ export const api = {
     return apiClientRaw<T>(endpoint, { method: 'GET' });
   },
 
+  async download(endpoint: string): Promise<Blob> {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'GET',
+      cache: 'no-store',
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      throw new ApiError(response.status, `Download failed with status ${response.status}`);
+    }
+
+    return response.blob();
+  },
+
   post<T>(endpoint: string, data?: unknown): Promise<T> {
     return apiClient<T>(endpoint, {
       method: 'POST',

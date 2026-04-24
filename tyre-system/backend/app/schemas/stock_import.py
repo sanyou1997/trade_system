@@ -71,6 +71,38 @@ class TyreImportConfirmItem(BaseModel):
     category: str = "branded_new"
 
 
+class OtherImportPreviewItem(BaseModel):
+    row_number: int
+    name: str
+    category: str
+    note: str
+    suggested_price: float
+    quantity: int
+    matched: bool
+    other_product_id: int | None = None
+    current_added_stock: int | None = None
+
+
+class OtherImportPreviewResult(BaseModel):
+    file_name: str
+    total_rows: int
+    matched_rows: int
+    unmatched_rows: int
+    total_quantity: int
+    items: list[OtherImportPreviewItem]
+    all_matched: bool
+
+
+class OtherImportConfirmItem(BaseModel):
+    other_product_id: int | None = None
+    quantity: int = Field(..., gt=0)
+    create_new: bool = False
+    name: str = ""
+    category: str = ""
+    note: str = ""
+    suggested_price: float = 0.0
+
+
 class StockImportLogResponse(BaseModel):
     id: int
     product_type: str
